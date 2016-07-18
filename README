@@ -10,8 +10,13 @@ mission planner targets, thruster heatmaps, 3D position, 3D velocity, and a
 model of the robot alongside 3D rotation information.
 -------------------------------------------------------------------------------
 Dependencies:
-   -matplotlib
-   -numpy
-   -Python
+  -matplotlib
+  -numpy
+  -Python
 -------------------------------------------------------------------------------
 
+07-17-16
+  -Began working with all the various layers in the package to lay out the
+   interface, change colors/styles, and plot/annotate data
+  -TODO ran into problem with plotting data on polar graph, wiped out half of
+   the axes.
