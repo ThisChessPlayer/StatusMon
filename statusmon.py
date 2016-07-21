@@ -36,6 +36,36 @@ mpl.rc('axes', edgecolor = LIGHT_GREEN, titlesize = 10)
 mpl.rc('font', size = 8)
 mpl.rc('grid', linestyle = ':')
 
+#most recent data
+data = np.zeros((2,4))
+data[0][0] = 3
+data[0][1] = 5
+data[0][2] = -4
+data[0][3] = 128
+
+data[1][0] = 0
+data[1][1] = 0
+data[1][2] = -6
+data[1][3] = 0
+
+#past data
+dataHist = np.zeros((11, 50))
+dataHist[0][49] = 1
+dataHist[1][44] = 2
+dataHist[2][39] = 4
+dataHist[3][34] = 6
+dataHist[4][29] = 8
+dataHist[5][24] = 10
+dataHist[6][19] = 12
+dataHist[7][14] = 14
+dataHist[8][9] = 16
+dataHist[9][4] = 18
+dataHist[10][1] = 20
+
+#colors for ax2 plots
+colors = ['#ff0000', '#cf0000', '#8f0000', '#00ff00', '#00cf00', '#008f00',
+          '#004f00', '#0000ff', '#0000cf', '#00008f', '#00004f']
+
 #create figure with 16:8 (width:height) ratio
 fig = plt.figure(figsize = (FIG_WIDTH, FIG_HEIGHT), dpi = 100)
 fig.canvas.set_window_title(FIG_NAME)
@@ -49,34 +79,15 @@ ax4 = plt.subplot2grid((6, 12), (3, 6), rowspan = 3, colspan = 3, projection = '
 ax5 = plt.subplot2grid((6, 12), (2, 9), rowspan = 4, colspan = 3)
 plt.tight_layout(pad = 2)
 
-#most recent data
-data = np.zeros((2,4))
-data[0][0] = 3
-data[0][1] = 5
-data[0][2] = -4
-data[0][3] = 128
+cvfMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
+cvdMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
 
-data[1][0] = 0
-data[1][1] = 0
-data[1][2] = -6
-data[1][3] = 0
+cvfText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
+cvdText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
 
-#3 for pos, 4 for vel, 4 for accel, log 50 values
-dataHist = np.zeros((11, 50))
-
-cvfMark, = ax1.plot(data[0][0], data[0][1], marker = 'o', c = DARK_RED,
-markersize = 10)
-
-cvdMark, = ax1.plot(data[0][0], data[0][1], marker = 'o', c = DARK_RED,
-markersize = 10)
-
-#CV forward text
-cvfText = ax1.text(data[0][0], data[0][1], '',
-            bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
-  
-#CV down text
-cvdText = ax1.text(data[1][0], data[1][1], '', 
-            bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
+mLines = [ax2.plot([], '-', color = colors[j])[0] for j in range(11)]
+#for i in range(0, 11):
+  #mLines[i] = ax2.plot(dataHist[i], '-', color = '#00ff00')
 
 #heatmap
 heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), cmap = 'RdBu', 
@@ -150,19 +161,6 @@ def initFigure():
   ax4.set_xlabel('X axis', color = LIGHT_GREEN)
   ax4.set_ylabel('Y axis', color = LIGHT_GREEN)
   ax4.set_zlabel('Z axis', color = LIGHT_GREEN)
-  
-  '''
-  for line in ax4.get_xticklines():
-    line.set_color('#000000')
-  for line in ax4.get_yticklines():
-    line.set_color('#000000')
-  for line in ax4.get_zticklines():
-    line.set_color('#000000')
-
-  ax4.set_frame_on(True)
-  '''
-  #sets background color of subplot
-  #ax4.patch.set_facecolor('#000000')
 
   #ax4.plot_wireframe(x, y, z, *args, **kwargs)
   #ax4.unit_cube(vals = None)
@@ -223,33 +221,20 @@ def animate(i):
   cvdText.set_text('CVDown\nx:{0:5.3f}\ny:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
                              data[1][0], data[1][1], data[1][2], data[1][3]))
 
-  '''
-  dataHist[0][49] = 1
-  dataHist[1][44] = 2
-  dataHist[2][39] = 4
-  dataHist[3][34] = 6
-  dataHist[4][29] = 8
-  dataHist[5][24] = 10
-  dataHist[6][19] = 12
-  dataHist[7][14] = 14
-  dataHist[8][9] = 16
-  dataHist[9][4] = 18
-  dataHist[10][1] = 20
-
-  ax2.plot(dataHist[0], '-', color = '#ff0000')
-  ax2.plot(dataHist[1], '-', color = '#cf0000')
-  ax2.plot(dataHist[2], '-', color = '#8f0000')
+  x = np.linspace(0, 49, 50)
+  count = 0
+  for line in mLines:
+    line.set_data(x, dataHist[count])
+    count += 1
   
-  ax2.plot(dataHist[3], '-', color = '#00ff00')
-  ax2.plot(dataHist[4], '-', color = '#00cf00')
-  ax2.plot(dataHist[5], '-', color = '#008f00')
-  ax2.plot(dataHist[6], '-', color = '#004f00')
+  ymax = 0
+  for j in range(count):
+    for k in range(50):
+      if dataHist[j][k] > ymax:
+        ymax = dataHist[j][k]
 
-  ax2.plot(dataHist[7], '-', color = '#0000ff')
-  ax2.plot(dataHist[8], '-', color = '#0000cf')
-  ax2.plot(dataHist[9], '-', color = '#00008f')
-  ax2.plot(dataHist[10], '-', color = '#00004f')
-
+  ax2.set_xticks(np.linspace(0, 50, 11))
+  ax2.set_yticks(np.linspace(0, ymax * 6 / 5, 7))
 
   ax2.legend(['pos x: {}'.format(dataHist[0][49]),
               'pos y: {}'.format(dataHist[1][49]),
@@ -263,12 +248,10 @@ def animate(i):
               'acc z: {}'.format(dataHist[9][49]),
               'acc t: {}'.format(dataHist[10][49])], 
               loc = 'upper left', numpoints = 1)
-  '''
-
   
   heatmap.set_array(np.random.uniform(size = (3, 4)))
 
-  return cvfMark, cvdMark, cvfText, cvdText, ax1, heatmap
+  return cvfMark, cvdMark, cvfText, cvdText, ax1, ax2, heatmap
 
 ani = animation.FuncAnimation(fig, animate, init_func = initFigure, interval =
 50, blit = True)
