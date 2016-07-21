@@ -15,6 +15,12 @@ Dependencies:
   -Python
 -------------------------------------------------------------------------------
 
+07-20-16
+  -Polar graph near complete, just need to grab values from buffer, then
+   implement coloring and marker sizes based on depth and confidence.
+  -Work was started on position graph, other lines can be plotted similarly to
+   first one.
+
 07-17-16
   -Began working with all the various layers in the package to lay out the
    interface, change colors/styles, and plot/annotate data
