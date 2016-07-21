@@ -86,12 +86,9 @@ cvfText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), c
 cvdText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
 
 mLines = [ax2.plot([], '-', color = colors[j])[0] for j in range(11)]
-#for i in range(0, 11):
-  #mLines[i] = ax2.plot(dataHist[i], '-', color = '#00ff00')
 
 #heatmap
-heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), cmap = 'RdBu', 
-            interpolation = 'nearest')
+heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), cmap = 'RdBu', interpolation = 'nearest')
 
 '''initPlot--------------------------------------------------------------------
 Sets up subplots and starting image of figure to display
@@ -117,7 +114,10 @@ def initFigure():
   '''[Position/Velocity/Acceleration]---------------------------------------'''
   #set title
   ax2.set_title('Movement')
-
+  
+  #set x scale
+  ax2.set_xticks(np.linspace(0, 50, 11))
+  
   #enable grid
   ax2.grid(True)
 
@@ -186,6 +186,7 @@ def animate(i):
   
   global ax1, ax2, ax3, ax4, ax5, data, dataHist
   
+  #store data updates
   data[0][0] += 0.05
   data[0][1] = data[0][1] + 0.1 % 5
 
@@ -221,21 +222,28 @@ def animate(i):
   cvdText.set_text('CVDown\nx:{0:5.3f}\ny:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
                              data[1][0], data[1][1], data[1][2], data[1][3]))
 
+  #update data for ax2 plots
   x = np.linspace(0, 49, 50)
-  count = 0
-  for line in mLines:
-    line.set_data(x, dataHist[count])
-    count += 1
+  #count = 0
+  #for line in mLines:
+  #  line.set_data(x, dataHist[count])
+  #  count += 1
+
+  for j in range(11):
+    mLines[j].set_data(x, dataHist[j])
   
+  #determine highest value to scale y axis properly
   ymax = 0
-  for j in range(count):
+  for j in range(11):
     for k in range(50):
       if dataHist[j][k] > ymax:
         ymax = dataHist[j][k]
+      dataHist[j][k] += 1
 
-  ax2.set_xticks(np.linspace(0, 50, 11))
+  #scale ax2 plot
   ax2.set_yticks(np.linspace(0, ymax * 6 / 5, 7))
 
+  #update legend with latest data values
   ax2.legend(['pos x: {}'.format(dataHist[0][49]),
               'pos y: {}'.format(dataHist[1][49]),
               'pos y: {}'.format(dataHist[2][49]),
@@ -249,10 +257,10 @@ def animate(i):
               'acc t: {}'.format(dataHist[10][49])], 
               loc = 'upper left', numpoints = 1)
   
+  #update motor heatmap
   heatmap.set_array(np.random.uniform(size = (3, 4)))
 
-  return cvfMark, cvdMark, cvfText, cvdText, ax1, ax2, heatmap
+ani = animation.FuncAnimation(fig, animate, init_func = initFigure, 
+                              interval = 50)
 
-ani = animation.FuncAnimation(fig, animate, init_func = initFigure, interval =
-50, blit = True)
 plt.show()
