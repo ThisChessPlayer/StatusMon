@@ -2,41 +2,16 @@
                                                          Author: Jason Ma
                                                          Date  : Jul 17 2016
    File Name  : statusmon.py
-   Description: Displays data from buffers that Cubeception 3 would write to.
+   Description: Displays random data similar to Cubeception 3.0 data
 ---*-----------------------------------------------------------------------*'''
-import sys
-sys.path.insert(0, '../DistributedSharedMemory/build')
-sys.path.insert(0, '../PythonSharedBuffers/src')
-from Constants import *
-import pydsm
-
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from mpl_toolkits.mplot3d import Axes3D
 
-from ctypes import *
-from Sensor import *
-from Master import *
-from Navigation import *
-from Vision import *
-from Serialization import *
-
 from itertools import product, combinations
 import numpy as np
 from numpy import sin, cos
-
-MOTOR_KILL_A_BIT     = 1
-MOTOR_HEALTH_A_BIT   = 1 << 1
-SENSOR_LIN_A_BIT     = 1 << 2
-SENSOR_ANG_A_BIT     = 1 << 3
-SENSOR_DATA_A_BIT    = 1 << 4
-MASTER_CON_A_BIT     = 1 << 5
-MASTER_GOALS_A_BIT   = 1 << 6
-MASTER_SENSRES_A_BIT = 1 << 7
-VIS_FORW_A_BIT       = 1 << 8
-VIS_DOWN_A_BIT       = 1 << 9
-SON_TARG_A_BIT       = 1 << 10
 
 NUM_TARGETS  = 2
 FIG_WIDTH    = 16
@@ -52,8 +27,6 @@ LIGHT_YELLOW = (1, 1, 0, 1)
 '''initGlobals-----------------------------------------------------------------
 Generates figure and subplots, sets basic layout.
 ----------------------------------------------------------------------------'''
-client = pydsm.Client(SONAR_SERVER_ID, 60, True)
-
 plt.style.use(PLOT_STYLE)
 
 mpl.rc(('text', 'xtick', 'ytick'), color = LIGHT_GREEN)
@@ -63,7 +36,7 @@ mpl.rc('font', size = 8)
 mpl.rc('grid', linestyle = ':')
 
 #most recent data
-data = np.zeros((9,4))
+data = np.zeros((2,4))
 data[0][0] = 3
 data[0][1] = 5
 data[0][2] = -4
@@ -95,7 +68,7 @@ colors = ['#ff0000', '#cf0000', '#8f0000', '#00ff00', '#00cf00', '#008f00',
 #create figure with 16:8 (width:height) ratio
 fig = plt.figure(figsize = (FIG_WIDTH, FIG_HEIGHT), dpi = 100)
 fig.canvas.set_window_title(FIG_NAME)
-#fig.suptitle(FIG_NAME)
+fig.suptitle("DEMO VERSION")
   
 #create subplots on a 4 row 8 column grid
 ax1 = plt.subplot2grid((6, 12), (0, 0), rowspan = 6, colspan = 6, polar = True)
@@ -131,7 +104,6 @@ heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), cmap = 'RdBu', interpolat
 #position graph plots
 mLines = [ax4.plot([], '-', color = colors[j])[0] for j in range(11)]
 
-statusStrings = np.empty(11, dtype = 'S4')
 status = ax5.text(0, 0, '')
 
 '''initPlot--------------------------------------------------------------------
@@ -161,8 +133,16 @@ def initFigure():
 
   #enable grid
   ax2.grid(b = False)
+
+  #set color of grid lines (only for reference)
+  #ax2.w_xaxis._axinfo.update({'grid' : {'color': (0, 0.25, 0, 1)}})
+  #ax2.w_yaxis._axinfo.update({'grid' : {'color': (0, 0.25, 0, 1)}})
+  #ax2.w_zaxis._axinfo.update({'grid' : {'color': (0, 0.25, 0, 1)}})
   
   #set color of backgrounds
+  #ax2.w_xaxis.set_pane_color((0, 0, 0, 1))
+  #ax2.w_yaxis.set_pane_color((0, 0, 0, 1))
+  #ax2.w_zaxis.set_pane_color((0, 0, 0, 1))
   ax2.w_xaxis.set_pane_color((0, 0.075, 0, 1))
   ax2.w_yaxis.set_pane_color((0, 0.075, 0, 1))
   ax2.w_zaxis.set_pane_color((0, 0.125, 0, 1))
@@ -258,117 +238,22 @@ def q_to_axisangle(q):
   theta = acos(w) * 2.0
   return normalize(v), theta
 
-'''getBufferData---------------------------------------------------------------
-Obtains most recent buffer data
-----------------------------------------------------------------------------'''
-def getBufferData():
-  data[8][0] = 0
-
-  temp, active = client.getRemoteBufferContents(MOTOR_KILL, MOTOR_SERVER_IP, MOTOR_SERVER_ID)
-  if active:
-    temp = Unpack(Kill, temp)
-    data[8][1] = temp.isKilled
-    statusStrings[0] = 'Up  '
-  else:
-    statusStrings[0] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(MOTOR_HEALTH, MOTOR_SERVER_IP, MOTOR_SERVER_ID)
-  if active:
-    temp = Unpack(Health, temp)
-    data[8][2] = temp.saturated
-    data[8][3] = temp.direction
-    statusStrings[1] = 'Up  '
-  else:
-    statusStrings[1] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(SENSORS_LINEAR, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
-  if active:
-    temp = Unpack(Linear, temp)
-    data[5] = temp.pos #TODO double check to make sure this works later on
-    data[6] = temp.vel
-    data[7] = temp.acc
-    statusStrings[2] = 'Up  '
-  else:
-    statusStrings[2] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(SENSORS_ANGULAR, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
-  #TODO can add more data in here later for the vel/acc angular fields
-  if active:
-    temp = Unpack(Angular, temp)
-    data[2] = temp.pos
-    statusStrings[3] = 'Up  '
-  else:
-    statusStrings[3] = 'Down'
-
-
-  temp, active = client.getRemoteBufferContents(SENSORS_DATA, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
-  if active:
-    #temp = Unpack(Data, temp)
-    #data[] = 
-    statusStrings[4] = 'Up  '
-  else:
-    statusStrings[4] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(MASTER_CONTROL, MASTER_SERVER_IP, MASTER_SERVER_ID)
-  if active:
-    #temp = Unpack(#either AxisControl or ControlInput, temp))
-    statusStrings[5] = 'Up  '
-  else:
-    statusStrings[5] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(MASTER_GOALS, MASTER_SERVER_IP, MASTER_SERVER_ID)
-  if active:
-    #temp = Unpack(Goals, temp)
-    statusStrings[6] = 'Up  '
-  else:
-    statusStrings[6] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(MASTER_SENSOR_RESET, MASTER_SERVER_IP, MASTER_SERVER_ID)
-  if active:
-    #temp = Unpack(SensorReset, temp)
-    statusStrings[7] = 'Up  '
-  else:
-    statusStrings[7] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(TARGET_LOCATION, FORWARD_VISION_SERVER_IP, FORWARD_VISION_SERVER_ID)
-  if active: 
-    temp = Unpack(Location, temp)
-    data[0][0] = temp.x
-    data[0][1] = temp.y
-    data[0][2] = temp.z
-    data[0][3] = temp.confidence
-    statusStrings[8] = 'Up  '
-  else:
-    statusStrings[8] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(TARGET_LOCATION, DOWNWARD_VISION_SERVER_IP, DOWNWARD_VISION_SERVER_ID)
-  if active:
-    temp = Unpack(Location, temp)
-    data[1][0] = temp.x
-    data[1][1] = temp.y
-    data[1][2] = temp.z
-    data[1][3] = temp.confidence
-    statusStrings[9] = 'Up  '
-  else:
-    statusStrings[9] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(TARGET_LOCATION, SONAR_SERVER_IP, SONAR_SERVER_ID)
-  if active:
-    statusStrings[10] = 'Up  '
-  else:
-    statusStrings[10] = 'Down'
-
-  
 '''animate---------------------------------------------------------------------
 Updates subplots of figure
 ----------------------------------------------------------------------------'''
 def animate(i):
   
   global ax1, ax2, ax3, ax4, ax5, data, dataHist, cubeLines, cubeArrow
-
-  getBufferData()
   
-  #copy pos/vel/acc data to dataHist
+  #store data updates
+  data[0][0] += 0.05
+  data[0][1] = data[0][1] + 0.1 % 5
+  data[0][2] -= 1
+  data[0][3] += 16
+  data[1][0] += 0.05
+  data[1][1] = data[1][1] + 0.3 % 5
+  data[1][2] += 1
+  data[1][3] -= 16
 
   '''[Polar Targets]--------------------------------------------------------'''  
   #determine max for scale adjustments
@@ -400,10 +285,11 @@ def animate(i):
     data[1][3] = 0
   elif data[1][3] > 255:
     data[1][3] = 255
+
   #update CV forward data
   cvfMark.set_data(data[0][0], data[0][1])
   cvfMark.set_color((1, data[0][2] / -10, 0, 1))
-  cvfMark.set_markersize(20 - data[0][3] * 5 / 128)
+  cvfMark.set_markersize(20 - data[0][3] * 5 / 128) 
 
   #update CV down data
   cvdMark.set_data(data[1][0], data[1][1])
@@ -414,15 +300,22 @@ def animate(i):
   cvfText.set_position((data[0][0], data[0][1]))  
   cvfText.set_text('CVForw\nx:{0:5.3f}\ny:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
                              data[0][0], data[0][1], data[0][2], data[0][3]))
-
+                                                                
   #CV down text
   cvdText.set_position((data[1][0], data[1][1]))  
   cvdText.set_text('CVDown\nx:{0:5.3f}\ny:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
                              data[1][0], data[1][1], data[1][2], data[1][3]))
 
   '''[Orientation]----------------------------------------------------------'''
-  quat = (data[2][0], data[2][1], data[2][2], data[2][3])
+  #create 3 random quaternions
+  q1 = axisangle_to_q((1, 0, 0), np.pi / 8)
+  q2 = axisangle_to_q((0, 1, 0), np.pi / 8)
+  q3 = axisangle_to_q((0, 1, 1), np.pi / 8)
   
+  #multiply all 3 quaternions into one for a single rotation transformation
+  quat = q_mult(q1, q2)
+  quat = q_mult(quat, q3)
+
   #apply transformation to all points of cube
   for j in range(16):
     v = qv_mult(quat, (cube[0][j], cube[1][j], cube[2][j]))
@@ -439,40 +332,21 @@ def animate(i):
   
   #remove old wireframes and plot new ones
   cubeLines.remove()
-  cubeArrow.remove()  
   cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], colors = LIGHT_GREEN)
+  cubeArrow.remove()
   cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
 
   '''[Thruster Heatmap]-----------------------------------------------------'''
-  heatArray = [[data[4][0], data[4][1], 0, 0], [data[4][2], data[4][3], 0, 0], 
-              [data[3][0], data[3][1], data[3][2], data[3][3]]]
-  
   #update motor heatmap
-  heatmap.set_array(heatArray)
+  heatmap.set_array(np.random.uniform(size = (3, 4)))
 
-  '''[Movement]-------------------------------------------------------------'''
+  '''[Position/Velocity/Acceleration]---------------------------------------'''
   #update data for ax4 plots
-  moveX = np.linspace(0, 49, 50)
-
-  for j in range(11):
-    for k in range(49):
-      dataHist[j][k] = dataHist[j][k + 1]
-  
-  for j in range(3):
-    dataHist[j][49] = data[5][j]
-  
-  for j in range(3):
-    dataHist[j + 3][49] = data[6][j]
-      
-  for j in range(3):
-    dataHist[j + 7][49] = data[7][j]
-
-  dataHist[6][49] = pow(pow(data[6][0], 2) + pow(data[6][1], 2) + pow(data[6][2], 2), 1/2)
-  dataHist[10][49] = pow(pow(data[7][0], 2) + pow(data[7][1], 2) + pow(data[7][2], 2), 1/2)
+  x = np.linspace(0, 49, 50)
 
   #update data for each plot
   for j in range(11):
-    mLines[j].set_data(moveX, dataHist[j])
+    mLines[j].set_data(x, dataHist[j])
   
   #determine highest value to scale y axis properly
   ymax = dataHist[0][0]
@@ -483,98 +357,30 @@ def animate(i):
         ymax = dataHist[j][k]
       elif dataHist[j][k] < ymin:
         ymin = dataHist[j][k]
+      dataHist[j][k] += 1
 
   #scale ax4 plot
   ax4.set_ylim(ymin, ymax + (ymax - ymin) / 5)
   ax4.set_yticks(np.linspace(ymin, ymax + (ymax - ymin) / 5, 7))
 
   #update legend with latest data values
-  ax4.legend(['px:{}'.format(dataHist[0][49]),
-              'py:{}'.format(dataHist[1][49]),
-              'py:{}'.format(dataHist[2][49]),
-              'vx:{}'.format(dataHist[3][49]),
-              'vy:{}'.format(dataHist[4][49]),
-              'vz:{}'.format(dataHist[5][49]),
-              'vt:{}'.format(dataHist[6][49]),
-              'ax:{}'.format(dataHist[7][49]),
-              'ay:{}'.format(dataHist[8][49]),
-              'az:{}'.format(dataHist[9][49]),
-              'at:{}'.format(dataHist[10][49])], 
+  ax4.legend(['px: {}'.format(dataHist[0][49]),
+              'py: {}'.format(dataHist[1][49]),
+              'py: {}'.format(dataHist[2][49]),
+              'vx: {}'.format(dataHist[3][49]),
+              'vy: {}'.format(dataHist[4][49]),
+              'vz: {}'.format(dataHist[5][49]),
+              'vt: {}'.format(dataHist[6][49]),
+              'ax: {}'.format(dataHist[7][49]),
+              'ay: {}'.format(dataHist[8][49]),
+              'az: {}'.format(dataHist[9][49]),
+              'at: {}'.format(dataHist[10][49])], 
               loc = 'upper left', numpoints = 1)
 
   '''[Multiple Axes]--------------------------------------------------------'''
-  
-  '''
-  if data[8][0] & MOTOR_KILL_A_BIT == MOTOR_KILL_A_BIT:
-    statusStrings[0] = 'Up  '
-  else:
-    statusStrings[0] = 'Down'
+  #TODO
+  #status.set_text()
 
-  if data[8][0] & MOTOR_HEALTH_A_BIT == MOTOR_HEALTH_A_BIT:
-    statusStrings[1] = 'Up  '
-  else:
-    statusStrings[1] = 'Down'
-
-  if data[8][0] & SENSOR_LIN_A_BIT == SENSOR_LIN_A_BIT:
-    statusStrings[2] = 'Up  '
-  else:
-    statusStrings[2] = 'Down'
-
-  if data[8][0] & SENSOR_ANG_A_BIT == SENSOR_ANG_A_BIT:
-    statusStrings[3] = 'Up  '
-  else:
-    statusStrings[3] = 'Down'
-
-  if data[8][0] & SENSOR_DATA_A_BIT == SENSOR_DATA_A_BIT:
-    statusStrings[4] = 'Up  '
-  else:
-    statusStrings[4] = 'Down'
-
-  if data[8][0] & MASTER_CON_A_BIT == MASTER_CON_A_BIT:
-    statusStrings[5] = 'Up  '
-  else:
-    statusStrings[5] = 'Down'
-
-  if data[8][0] & MASTER_GOALS_A_BIT == MASTER_GOALS_A_BIT:
-    statusStrings[6] = 'Up  '
-  else:
-    statusStrings[6] = 'Down'
-
-  if data[8][0] & MASTER_SENSRES_A_BIT == MASTER_SENSRES_A_BIT:
-    statusStrings[7] = 'Up  '
-  else:
-    statusStrings[7] = 'Down'
-
-  if data[8][0] & VIS_FORW_A_BIT == VIS_FORW_A_BIT:
-    statusStrings[8] = 'Up  '
-  else:
-    statusStrings[8] = 'Down'
-
-  if data[8][0] & VIS_DOWN_A_BIT == VIS_DOWN_A_BIT:
-    statusStrings[9] = 'Up  '
-  else:
-    statusStrings[9] = 'Down'
-
-  if data[8][0] & SON_TARG_A_BIT == SON_TARG_A_BIT:
-    statusStrings[10] = 'Up  '
-  else:
-    statusStrings[10] = 'Down'
-  '''
-  
-  status.set_text('Status Motor  Kill  :{}\nStatus Motor  Health:{}\nStatus Sensor Linear:{}\nStatus Sensor Ang   :{}\nStatus Sensor Data  :{}\nStatus Master Cont  :{}\nStatus Master Goals :{}\nStatus Master SenRes:{}\nStatus CVDown Target:{}\nStatus CVForw Target:{}\nStatus Sonar  Target:{}'.format(
-                   statusStrings[0], 
-                   statusStrings[1], 
-                   statusStrings[2], 
-                   statusStrings[3],
-                   statusStrings[4], 
-                   statusStrings[5],
-                   statusStrings[6], 
-                   statusStrings[7],
-                   statusStrings[8], 
-                   statusStrings[9],
-                   statusStrings[10], 
-                   ))
-  
 #set up animation
 ani = animation.FuncAnimation(fig, animate, init_func = initFigure, 
                               interval = 1000)

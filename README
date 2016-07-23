@@ -12,12 +12,20 @@ model of the robot alongside 3D rotation information.
 Dependencies:
   -matplotlib
   -numpy
-  -Python
+  -Python (2.7 and 3.5 officially supported)
+  -PythonSharedBuffers
+  -DistributedSharedMemory
 -------------------------------------------------------------------------------
+07-22-16
+  -Separated statusmon into demo and run configurations
+  -Buffer support added, successfully reads whether buffers are active and gets
+   data from buffers, displays data.
+
 07-21-16
   -All subplots ready to accept input from buffers
   -Cube and front face arrow are drawn on orientation 3D subplot
   -Position of orientation subplot and position subplot have been switched
+
 07-20-16
   -Polar graph near complete, just need to grab values from buffer, then
    implement coloring and marker sizes based on depth and confidence.
