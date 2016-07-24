@@ -62,7 +62,8 @@ fig.canvas.set_window_title(FIG_NAME)
   
 #Create subplots on a 4 row 8 column grid
 ax1 = plt.subplot2grid((6, 12), (0, 0), rowspan = 6, colspan = 6, polar = True)
-ax2 = plt.subplot2grid((6, 12), (0, 6), rowspan = 3, colspan = 3, projection = '3d')
+ax2 = plt.subplot2grid((6, 12), (0, 6), rowspan = 3, colspan = 3, 
+                                                             projection = '3d')
 ax3 = plt.subplot2grid((6, 12), (0, 9), rowspan = 2, colspan = 3)
 ax4 = plt.subplot2grid((6, 12), (3, 6), rowspan = 3, colspan = 3)
 ax5 = plt.subplot2grid((6, 12), (2, 9), rowspan = 4, colspan = 3)
@@ -70,25 +71,39 @@ plt.tight_layout(pad = 2)
 
 '''[Initialize Data]--------------------------------------------------------'''
 #Holds all displayed data from buffers
-data = np.zeros((9,4))
+cvforwardData    = np.zeros((3, 5))
+cvdownData       = np.zeros((5))
+orientationData  = np.zeros((4))
+thrusterData     = np.zeros((2, 4))
+movementData     = np.zeros((3, 4))
+statusData       = np.zeros((3))
 
 '''[Init Polar Targets]-----------------------------------------------------'''
 #Default vision display
-data[0][0] = 0 #CV forw
-data[0][1] = 5
-data[0][2] = 4
-data[0][3] = 0
+for i in range(3):
+  cvforwardData[i][0] = np.random.randint(0, 4)
+  cvforwardData[i][1] = np.random.randint(0, 5)
+  cvforwardData[i][2] = np.random.randint(-10, 10)
+  cvforwardData[i][3] = np.random.randint(0, 255)
+  cvforwardData[i][4] = np.random.randint(0, 5)
 
-data[1][0] = 0 #CV down
-data[1][1] = 0
-data[1][2] = -6
-data[1][3] = 256
+cvdownData[0] = np.random.randint(0, 4)
+cvdownData[1] = np.random.randint(0, 5)
+cvdownData[2] = np.random.randint(-10, 10)
+cvdownData[3] = np.random.randint(0, 255)
+cvdownData[4] = np.random.randint(0, 5)
 
+cvfMark = np.empty(3, dtype = object)
+cvfText = np.empty(3, dtype = object)
 #Polar target marks and text
-cvfMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
+for i in range(3):
+  cvfMark[i], = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
+  cvfText[i] = ax1.text(0, 0, '', 
+                bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
+
 cvdMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
-cvfText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
-cvdText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
+cvdText = ax1.text(0, 0, '', 
+                bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
 
 '''[Init Orientation]-------------------------------------------------------'''
 #Cube for orientation viewer
@@ -107,7 +122,8 @@ cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
 
 '''[Init Heatmap]-----------------------------------------------------------'''
 #Heatmap
-heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), cmap = 'RdBu', interpolation = 'nearest')
+heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), 
+                     cmap = 'RdBu', interpolation = 'nearest')
 
 '''[Init Movement]----------------------------------------------------------'''
 #Past ax4 data to plot
@@ -151,7 +167,8 @@ def initFigure():
   ax1.set_theta_direction(-1)
   
   #Format ticks and labels
-  ax1.set_thetagrids(np.linspace(0, 360, NUM_PL_LINES, endpoint = False), frac = 1.05)
+  ax1.set_thetagrids(np.linspace(0, 360, NUM_PL_LINES, endpoint = False), 
+                     frac = 1.05)
   ax1.set_rlabel_position(90)
 
   #Make ygridlines more visible (circular lines)
@@ -261,7 +278,7 @@ def q_to_axisangle(q):
   theta = acos(w) * 2.0
   return normalize(v), theta
 
-'''animate---------------------------------------------------------------------
+'''genData---------------------------------------------------------------------
 Generates fake data to display
 ----------------------------------------------------------------------------'''
 def genData():
@@ -270,11 +287,18 @@ def genData():
     statusStrings[i] = 'Up  '
 
   #Generate forward and downward computer vision data
-  for i in range(2):
-    data[i][0] = np.random.randint(0, 3)
-    data[i][1] = np.random.randint(0, 5)
-    data[i][2] = np.random.randint(-10, 10)
-    data[i][3] = np.random.randint(0, 255)
+  for i in range(3):
+    cvforwardData[i][0] = np.random.randint(0, 3)
+    cvforwardData[i][1] = np.random.randint(0, 5)
+    cvforwardData[i][2] = np.random.randint(-10, 10)
+    cvforwardData[i][3] = np.random.randint(0, 255)
+    cvforwardData[i][4] = np.random.randint(0, 5)
+
+  cvdownData[0] = np.random.randint(0, 3)
+  cvdownData[1] = np.random.randint(0, 5)
+  cvdownData[2] = np.random.randint(-10, 10)
+  cvdownData[3] = np.random.randint(0, 255)
+  cvdownData[4] = np.random.randint(0, 5)
 
   #Generate 3 quaternions representing 3 rotations
   q1 = axisangle_to_q((1, 0, 0), np.random.randint(0, 3) / 8)
@@ -285,17 +309,17 @@ def genData():
   quat = q_mult(q_mult(q1, q2), q3)
   
   for i in range(4):
-    data[2][i] = quat[i]
+    orientationData[i] = quat[i]
   
   #Generate thruster output data
-  for i in range(3, 5):
+  for i in range(2):
     for j in range(4):
-      data[i][j] = np.random.randint(0, 10) / 10
+      thrusterData[i][j] = np.random.randint(0, 10) / 10
   
   #Generate movement data
-  for i in range(5, 8):
+  for i in range(3):
     for j in range(3):
-      data[i][j] += np.random.randint(-2, 2)
+      movementData[i][j] += np.random.randint(-2, 2)
 
 '''animate---------------------------------------------------------------------
 Updates subplots of figure
@@ -309,60 +333,70 @@ def animate(i):
   
   '''[Polar Targets]--------------------------------------------------------'''  
   #Determine max for scale adjustments
-  if data[0][1] > data[1][1]:
-    max = data[0][1]
-  else:
-    max = data[1][1]
+  max = 0
+  for j in range(3):
+    if cvforwardData[j][1] > max:
+      max = cvforwardData[j][1]
+
+  if cvdownData[1] > max:
+    max = cvdownData[1]
 
   #Adjust scale of ax1 to fit data nicely
   ax1.set_yticks(np.linspace(0, max * 6 / 5, 7))
   ax1.set_ylim(0, max * 6 / 5)
 
   #Ensure statusmon doesn't crash if CV returns crazy values
-  if data[0][2] > 0:
-    data[0][2] = 0
-  elif data[0][2] < -10:
-    data[0][2] = -10
+  for j in range(3):
+    if cvforwardData[j][2] > 0:
+      cvforwardData[j][2] = 0
+    elif cvforwardData[j][2] < -10:
+      cvforwardData[j][2] = -10
 
-  if data[1][2] > 10:
-    data[1][2] = 10
-  elif data[1][2] < -10:
-    data[1][2] = -10
+    if cvforwardData[j][3] < 0:
+      cvforwardData[j][3] = 0
+    elif cvforwardData[j][3] > 255:
+      cvforwardData[j][3] = 255
 
-  if data[0][3] < 0:
-    data[0][3] = 0
-  elif data[0][3] > 255:
-    data[0][3] = 255
+  if cvdownData[2] > 10:
+    cvdownData[2] = 10
+  elif cvdownData[2] < -10:
+    cvdownData[2] = -10
 
-  if data[1][3] < 0:
-    data[1][3] = 0
-  elif data[1][3] > 255:
-    data[1][3] = 255
+  if cvdownData[3] < 0:
+    cvdownData[3] = 0
+  elif cvdownData[3] > 255:
+    cvdownData[3] = 255
 
-  #Update CV forward data
-  cvfMark.set_data(data[0][0], data[0][1])
-  cvfMark.set_color((1, data[0][2] / -10, 0, 1))
-  cvfMark.set_markersize(20 - data[0][3] * 5 / 128)
+  for j in range(3):
+    #Update CV forward data
+    cvfMark[j].set_data(cvforwardData[j][0], cvforwardData[j][1])
+    cvfMark[j].set_color((1, cvforwardData[j][2] / -10, 0, 1))
+    cvfMark[j].set_markersize(20 - cvforwardData[j][3] * 5 / 128)
+
+    #Update CV forward text
+    cvfText[j].set_position((cvforwardData[j][0], cvforwardData[j][1]))  
+    cvfText[j].set_text('CVForw\nx:{0:5.3f}\n'\
+                        'y:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
+                             cvforwardData[j][0], cvforwardData[j][1], 
+                             cvforwardData[j][2], cvforwardData[j][3]))
 
   #Update CV down data
-  cvdMark.set_data(data[1][0], data[1][1])
-  cvdMark.set_color((1, data[1][2] / -20 + 0.5, 0, 1))
-  cvdMark.set_markersize(20 - data[1][3] * 5 / 128)
-
-  #Update CV forward text
-  cvfText.set_position((data[0][0], data[0][1]))  
-  cvfText.set_text('CVForw\nx:{0:5.3f}\ny:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
-                             data[0][0], data[0][1], data[0][2], data[0][3]))
+  cvdMark.set_data(cvdownData[0], cvdownData[1])
+  cvdMark.set_color((1, cvdownData[2] / -20 + 0.5, 0, 1))
+  cvdMark.set_markersize(20 - cvdownData[3] * 5 / 128)
 
   #Update CV down text
-  cvdText.set_position((data[1][0], data[1][1]))  
-  cvdText.set_text('CVDown\nx:{0:5.3f}\ny:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
-                             data[1][0], data[1][1], data[1][2], data[1][3]))
+  cvdText.set_position((cvdownData[0], cvdownData[1]))  
+  cvdText.set_text('CVDown\nx:{0:5.3f}\n'\
+                   'y:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
+                             cvdownData[0], cvdownData[1], 
+                             cvdownData[2], cvdownData[3]))
 
   '''[Orientation]----------------------------------------------------------'''
   #Only rotate model if stream is online
   if statusStrings[4] == 'Up  ':
-    quat = (data[2][0], data[2][1], data[2][2], data[2][3])
+    quat = (orientationData[0], orientationData[1], 
+            orientationData[2], orientationData[3])
   else:
     #Default quaternion results in no rotation
     quat = (1, 0, 0, 0)
@@ -393,13 +427,17 @@ def animate(i):
   #Remove old wireframes and plot new ones
   cubeLines.remove()
   cubeArrow.remove()  
-  cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], colors = LIGHT_GREEN)
-  cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
+  cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], 
+                                 colors = LIGHT_GREEN)
+  cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], 
+                                 colors = LIGHT_YELLOW)
   
   '''[Thruster Heatmap]-----------------------------------------------------'''
   #Map data to heatmap
-  heatArray = [[data[4][0], data[4][1], 0, 0], [data[4][2], data[4][3], 0, 0], 
-              [data[3][0], data[3][1], data[3][2], data[3][3]]]
+  heatArray = [[thrusterData[1][0], thrusterData[1][1], 0, 0], 
+               [thrusterData[1][2], thrusterData[1][3], 0, 0], 
+               [thrusterData[0][0], thrusterData[0][1], 
+                thrusterData[0][2], thrusterData[0][3]]]
   
   #Update motor heatmap
   heatmap.set_array(heatArray)
@@ -413,15 +451,19 @@ def animate(i):
     for k in range(HIST_LENGTH - 1):
       dataHist[j][k] = dataHist[j][k + 1]
   for j in range(3):
-    dataHist[j][HIST_LENGTH - 1] = data[5][j]
+    dataHist[j][HIST_LENGTH - 1] = movementData[0][j]
   for j in range(3):
-    dataHist[j + 3][HIST_LENGTH - 1] = data[6][j]
+    dataHist[j + 3][HIST_LENGTH - 1] = movementData[1][j]
   for j in range(3):
-    dataHist[j + 7][HIST_LENGTH - 1] = data[7][j]
+    dataHist[j + 7][HIST_LENGTH - 1] = movementData[2][j]
 
   #Calculate total velocity/acceleration
-  dataHist[6][HIST_LENGTH - 1] = pow(pow(data[6][0], 2) + pow(data[6][1], 2) + pow(data[6][2], 2), 1/2)
-  dataHist[10][HIST_LENGTH - 1] = pow(pow(data[7][0], 2) + pow(data[7][1], 2) + pow(data[7][2], 2), 1/2)
+  dataHist[6][HIST_LENGTH - 1]  = pow(pow(movementData[1][0], 2) + 
+                                      pow(movementData[1][1], 2) + 
+                                      pow(movementData[1][2], 2), 1/2)
+  dataHist[10][HIST_LENGTH - 1] = pow(pow(movementData[2][0], 2) + 
+                                      pow(movementData[2][1], 2) + 
+                                      pow(movementData[2][2], 2), 1/2)
 
   #Update data for each plot
   for j in range(NUM_MV_LINES):
@@ -455,7 +497,7 @@ def animate(i):
               'ax:{}'.format(round(dataHist[7][HIST_LENGTH - 1], 3)),
               'ay:{}'.format(round(dataHist[8][HIST_LENGTH - 1], 3)),
               'az:{}'.format(round(dataHist[9][HIST_LENGTH - 1], 3)),
-              'at:{}'.format(round(dataHist[10][HIST_LENGTH - 1], 3))], 
+              'at:{}'.format(round(dataHist[10][HIST_LENGTH - 1], 3))],
               loc = 'upper left', numpoints = 1)
 
   '''[Multiple Axes]--------------------------------------------------------'''
