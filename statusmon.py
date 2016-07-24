@@ -35,18 +35,11 @@ CLIENT_SERV  = SONAR_SERVER_ID #Server id to connect to
 CLIENT_ID    = 60              #Client id to register to server
 NUM_BUFFERS  = 12              #Number of buffers to read from
 
-#Display Constants
-NUM_PL_LINES = 36   #Number of polar theta lines to plot
-NUM_TARGETS  = 2    #Number of targets to plot on polar targets viewer
-CUBE_POINTS  = 16   #Number of points in cube orientation plot
-ARROW_POINTS = 8    #Number of points in cube arrow plot
-NUM_MV_LINES = 11   #Number o movement lines to plot
-HIST_LENGTH  = 50   #Number of past data points to store for movement viewer
-DELAY        = 1000 #Millisecond delay between drawings
-bufNames = [MOTOR_KILL,             MOTOR_HEALTH,              MOTOR_OUTPUTS,
-            SENSORS_LINEAR,         SENSORS_ANGULAR,           SENSORS_DATA, 
-            MASTER_CONTROL,         MASTER_GOALS,              MASTER_SENSOR_RESET,
-            TARGET_LOCATION,        TARGET_LOCATION,           TARGET_LOCATION]
+#DSM Buffer Values
+bufNames = [MOTOR_KILL,         MOTOR_HEALTH,       MOTOR_OUTPUTS,
+            SENSORS_LINEAR,     SENSORS_ANGULAR,    SENSORS_DATA, 
+            MASTER_CONTROL,     MASTER_GOALS,       MASTER_SENSOR_RESET,
+            TARGET_LOCATION,    TARGET_LOCATION,    TARGET_LOCATION]
 bufIps = [MOTOR_SERVER_IP,          MOTOR_SERVER_IP,           MOTOR_SERVER_IP,
           SENSOR_SERVER_IP,         SENSOR_SERVER_IP,          SENSOR_SERVER_IP, 
           MASTER_SERVER_IP,         MASTER_SERVER_IP,          MASTER_SERVER_IP, 
@@ -56,6 +49,16 @@ bufIds = [MOTOR_SERVER_ID,          MOTOR_SERVER_ID,           MOTOR_SERVER_ID,
           MASTER_SERVER_ID,         MASTER_SERVER_ID,          MASTER_SERVER_ID, 
           FORWARD_VISION_SERVER_ID, DOWNWARD_VISION_SERVER_ID, SONAR_SERVER_ID]
 
+#Animation Constants
+NUM_PL_LINES = 36   #Number of polar theta lines to plot
+NUM_TARGETS  = 2    #Number of targets to plot on polar targets viewer
+CUBE_POINTS  = 16   #Number of points in cube orientation plot
+ARROW_POINTS = 8    #Number of points in cube arrow plot
+NUM_MV_LINES = 11   #Number o movement lines to plot
+HIST_LENGTH  = 50   #Number of past data points to store for movement viewer
+DELAY        = 1000 #Millisecond delay between drawings
+
+#Display Constants
 FIG_WIDTH    = 16                             #Aspect width
 FIG_HEIGHT   = 8                              #Aspect height
 FIG_NAME     = 'Cubeception 3 Status Monitor' #Name displayed in window
@@ -372,6 +375,7 @@ def animate(i):
 
   #Adjust scale of ax1 to fit data nicely
   ax1.set_yticks(np.linspace(0, max * 6 / 5, 7))
+  ax1.set_ylim(0, max * 6 / 5)
 
   #Ensure statusmon doesn't crash if CV returns crazy values
   if data[0][2] > 0:
@@ -500,17 +504,17 @@ def animate(i):
     ax4.set_yticks(movementTicks)
 
   #Update legend with latest data values
-  ax4.legend(['px:{}'.format(dataHist[0][HIST_LENGTH - 1]),
-              'py:{}'.format(dataHist[1][HIST_LENGTH - 1]),
-              'py:{}'.format(dataHist[2][HIST_LENGTH - 1]),
-              'vx:{}'.format(dataHist[3][HIST_LENGTH - 1]),
-              'vy:{}'.format(dataHist[4][HIST_LENGTH - 1]),
-              'vz:{}'.format(dataHist[5][HIST_LENGTH - 1]),
-              'vt:{}'.format(dataHist[6][HIST_LENGTH - 1]),
-              'ax:{}'.format(dataHist[7][HIST_LENGTH - 1]),
-              'ay:{}'.format(dataHist[8][HIST_LENGTH - 1]),
-              'az:{}'.format(dataHist[9][HIST_LENGTH - 1]),
-              'at:{}'.format(dataHist[10][HIST_LENGTH - 1])], 
+  ax4.legend(['px:{}'.format(round(dataHist[0][HIST_LENGTH - 1], 3)),
+              'py:{}'.format(round(dataHist[1][HIST_LENGTH - 1], 3)),
+              'py:{}'.format(round(dataHist[2][HIST_LENGTH - 1], 3)),
+              'vx:{}'.format(round(dataHist[3][HIST_LENGTH - 1], 3)),
+              'vy:{}'.format(round(dataHist[4][HIST_LENGTH - 1], 3)),
+              'vz:{}'.format(round(dataHist[5][HIST_LENGTH - 1], 3)),
+              'vt:{}'.format(round(dataHist[6][HIST_LENGTH - 1], 3)),
+              'ax:{}'.format(round(dataHist[7][HIST_LENGTH - 1], 3)),
+              'ay:{}'.format(round(dataHist[8][HIST_LENGTH - 1], 3)),
+              'az:{}'.format(round(dataHist[9][HIST_LENGTH - 1], 3)),
+              'at:{}'.format(round(dataHist[10][HIST_LENGTH - 1], 3))],               loc = 'upper left', numpoints = 1)
               loc = 'upper left', numpoints = 1)
 
   '''[Multiple Axes]--------------------------------------------------------'''
