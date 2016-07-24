@@ -514,7 +514,7 @@ def animate(i):
               'ax:{}'.format(round(dataHist[7][HIST_LENGTH - 1], 3)),
               'ay:{}'.format(round(dataHist[8][HIST_LENGTH - 1], 3)),
               'az:{}'.format(round(dataHist[9][HIST_LENGTH - 1], 3)),
-              'at:{}'.format(round(dataHist[10][HIST_LENGTH - 1], 3))],               loc = 'upper left', numpoints = 1)
+              'at:{}'.format(round(dataHist[10][HIST_LENGTH - 1], 3))],
               loc = 'upper left', numpoints = 1)
 
   '''[Multiple Axes]--------------------------------------------------------'''
