@@ -20,6 +20,8 @@ Dependencies:
   -Statusmon working with DSM servers/buffers, can successfully read from
    remote buffers and display data accordingly
   -Made much more modifiable with run constants for quick changes
+  -Demo version can now be used to test functionality by plugging random data
+   into the real version's animations.
 
 07-22-16
   -Separated statusmon into demo and run configurations
