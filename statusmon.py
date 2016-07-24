@@ -752,3 +752,4 @@ ani = animation.FuncAnimation(fig, animate, init_func = initFigure,
 
 #Show the figure
 plt.show()
+
