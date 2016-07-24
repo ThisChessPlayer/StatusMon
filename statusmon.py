@@ -12,7 +12,12 @@ import sys, getopt
 sys.path.insert(0, '../DistributedSharedMemory/build')
 sys.path.insert(0, '../PythonSharedBuffers/src')
 import pydsm
-import ctypes, Sensor, Master, Navigation, Vision, Serialization
+from ctypes import *
+from Sensor import *
+from Master import *
+from Navigation import *
+from Vision import *
+from Serialization import *
 from Constants import *
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -27,7 +32,7 @@ from numpy import sin, cos
 CLIENT_SERV  = SONAR_SERVER_ID #Server id to connect to
 CLIENT_ID    = 60              #Client id to register to server
 NUM_BUFFERS  = 12              #Number of buffers to read from
-
+NUM_DEBUG    = 1               #Number of buffers to read debug from
 #DSM Buffer Values
 bufNames = [MOTOR_KILL,         MOTOR_HEALTH,       MOTOR_OUTPUTS,
             SENSORS_LINEAR,     SENSORS_ANGULAR,    SENSORS_DATA, 
@@ -35,12 +40,20 @@ bufNames = [MOTOR_KILL,         MOTOR_HEALTH,       MOTOR_OUTPUTS,
             TARGET_LOCATION,    TARGET_LOCATION,    TARGET_LOCATION]
 bufIps = [MOTOR_SERVER_IP,          MOTOR_SERVER_IP,           MOTOR_SERVER_IP,
           SENSOR_SERVER_IP,         SENSOR_SERVER_IP,          SENSOR_SERVER_IP, 
-          MASTER_SERVER_IP,         MASTER_SERVER_IP,          MASTER_SERVER_IP, 
+          '10.0.1.8',         MASTER_SERVER_IP,          MASTER_SERVER_IP, 
           FORWARD_VISION_SERVER_IP, DOWNWARD_VISION_SERVER_IP, SONAR_SERVER_IP]
 bufIds = [MOTOR_SERVER_ID,          MOTOR_SERVER_ID,           MOTOR_SERVER_ID,
           SENSOR_SERVER_ID,         SENSOR_SERVER_ID,          SENSOR_SERVER_ID, 
           MASTER_SERVER_ID,         MASTER_SERVER_ID,          MASTER_SERVER_ID, 
           FORWARD_VISION_SERVER_ID, DOWNWARD_VISION_SERVER_ID, SONAR_SERVER_ID]
+
+#Arg parse constants
+MODE_LIVE  = 0
+MODE_DEBUG = 1
+MODE_DEMO  = 2
+
+INIT_ZERO  = 0
+INIT_RAND  = 1
 
 #Animation Constants
 NUM_PL_LINES = 36   #Number of polar theta lines to plot
@@ -68,35 +81,38 @@ TITLE_SIZE   = 10                             #Default title font size
 '''Parse Args------------------------------------------------------------------
 Parse command line args
 ----------------------------------------------------------------------------'''
-mode = 0      #Default mode is ReadBufferMode
-randInit = 0  #Default init is 0 init
+mode = MODE_LIVE     #Default mode is ReadBufferMode
+randInit = INIT_ZERO  #Default init is 0 init
 
-modeStr = ['Live', 'Demo']
+modeStr = ['Live ', 'Debug', 'Demo ']
 initStr = ['Zero', 'Rand']
 
 if len(sys.argv) > 1:
   try:
-    opts, args = getopt.getopt(sys.argv[1:], 'hdr')
+    opts, args = getopt.getopt(sys.argv[1:], 'hm:r')
   except getopt.GetoptError as err:
     #Print error message, then print short usage, then exit
     print(err)
-    print('statusmon.py [-d] (Demo mode) [-r] (Rand init) | [-h] (Show Help)')
+    print('statusmon.py [-m] (Set mode) [-r] (Rand init) | [-h] (Show Help)')
     sys.exit(2)
 
   for opt, arg in opts:
     if opt == '-h':    #Print help and exit
-      print('statusmon.py [-d] | [-h]\n'\
-            '-d   Demo Mode\n'\
+      print('statusmon.py [-m] | [-h]\n'\
+            '-m   Set Mode (debug, demo)\n'\
             '-r   Random Data Init\n'\
             '-h   Show help')
       sys.exit()
-    elif opt == '-d':  #Set mode to demo
-      mode = 1
+    elif opt == '-m':  #Set mode to demo
+      if arg == 'debug':
+        mode = MODE_DEBUG
+      elif arg == 'demo':
+        mode = MODE_DEMO
     elif opt == '-r':  #Set init mode to random
-      randInit = 1
+      randInit = INIT_RAND
 
-print('[Mode: {}]'.format(modeStr[mode]))
-print('[Init: {}]'.format(initStr[randInit]))
+print('[Mode: {}  ]'.format(modeStr[mode]))
+print('[Init: {}   ]'.format(initStr[randInit]))
 
 
 '''Init------------------------------------------------------------------------
@@ -147,9 +163,12 @@ thrusterData     = np.zeros((2, 4))
 movementData     = np.zeros((3, 4))
 statusData       = np.zeros((3))
 
+#Debug data
+masterControlData = np.zeros((3, 3, 3))
+
 '''[Init Polar Targets]-----------------------------------------------------'''
 
-if randInit == 1:
+if randInit == INIT_RAND:
   for i in range(3):
     cvforwardData[i][0] = np.random.randint(0, 4)
     cvforwardData[i][1] = np.random.randint(0, 5)
@@ -195,17 +214,17 @@ cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
 heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), 
                      cmap = 'RdBu', interpolation = 'nearest')
 
-if randInit == 0:
+if randInit == INIT_ZERO:
   heatmap.set_array(np.zeros((3, 4)))
 
 '''[Init Movement]----------------------------------------------------------'''
 #Past ax4 data to plot
 dataHist = np.zeros((NUM_MV_LINES, HIST_LENGTH))
-if randInit == 0:
+if randInit == INIT_ZERO:
   ax4.set_xticks(np.linspace(0, HIST_LENGTH - 1, HIST_LENGTH))
   ax4.set_yticks(np.linspace(-1, 1, 5))
   ax4.set_ylim(-1, 1)  
-if randInit == 1:
+if randInit == INIT_RAND:
   dataHist[0][49] = 1
   dataHist[1][44] = 2
   dataHist[2][39] = 4
@@ -228,8 +247,10 @@ mLines = [ax4.plot([], '-', color = colors[j])[0] for j in range(NUM_MV_LINES)]
 
 '''[Init Status]------------------------------------------------------------'''
 statusStrings = np.empty(NUM_BUFFERS, dtype = 'object')
-status = ax5.text(0.05, .65, '')
-
+status = ax5.text(0.05, .55, 'Loading')
+debugStatus = ax5.text(0.05, .3, '')
+status.set_family('monospace')
+debugStatus.set_family('monospace')
 '''initPlot--------------------------------------------------------------------
 Sets up subplots and starting image of figure to display
 ----------------------------------------------------------------------------'''
@@ -312,6 +333,8 @@ def initFigure():
            
   for ax in ax2, ax5:
     ax.tick_params(labelbottom = 'off', labelleft = 'off')
+
+  print('[Init Complete]')
 
 '''quaternionFuncs-------------------------------------------------------------
 Functions to create and use quaternions for robot orientation viewer
@@ -401,7 +424,7 @@ def genData():
 '''getBufferData---------------------------------------------------------------
 Obtains most recent buffer data
 ----------------------------------------------------------------------------'''
-def getBufferData():
+def getBufferData(debug):
   
   #Check each buffer's status and update data array if active
   for i in range(NUM_BUFFERS):
@@ -432,7 +455,33 @@ def getBufferData():
         for j in range(4):
           orientationData[j] = temp.pos[j]
       #elif i == 5:                       #Sensors Data
-      #elif i == 6:                       #Master Control 
+      elif i == 6:                       #Master Control
+        if debug:
+          temp = Unpack(ControlInput, temp)
+          masterControlData[2][0][0] = int(temp.mode)
+          
+          #Unpack angular data
+          for j in range(3):
+            if ((1 << j) & int(temp.mode)):
+              masterControlData[0][j][0] = 0
+              for k in range(2):
+                masterControlData[0][j][k + 1] = temp.angular[j].pos[k]
+            else:
+              masterControlData[0][j][0] = temp.angular[j].vel
+              for k in range(2):
+                masterControlData[0][j][k + 1] = 0
+
+          #Unpack linear data
+          for j in range(3):
+            if ((1 << (j + 3)) & int(temp.mode)):
+              masterControlData[1][j][0] = 0
+              for k in range(2):            
+                masterControlData[1][j][k + 1] = temp.linear[j].pos[k]
+            else:
+              masterControlData[1][j][0] = temp.linear[j].vel
+              for k in range(2):            
+                masterControlData[1][j][k + 1] = 0
+
       #elif i == 7:                       #Master Goals
       #elif i == 8:                       #Master Sensor Reset
       elif i == 9:                        #CV Forw Target Location
@@ -465,10 +514,10 @@ def animate(i):
   global mode, ax1, ax2, ax3, ax4, ax5, data, dataHist, cubeLines, cubeArrow
 
   #Grab latest data to plot as well as info on whether buffers are online
-  if mode == 0:
-    getBufferData()
-  elif mode == 1:
+  if mode == MODE_DEMO:
     genData()
+  else:
+    getBufferData(mode)
   
   '''[Polar Targets]--------------------------------------------------------'''  
 
@@ -655,16 +704,48 @@ def animate(i):
 
   '''[Multiple Axes]--------------------------------------------------------'''
   #Update status text
-  status.set_text('Buffer Status:\n' \
-         'Motor Kill:{}\nMotor Health:{}\nMotor Outputs:{}\n' \
-         'Sensor Lin:{}\nSensor Ang:{}\nSensor Data:{}\n' \
-         'Master Control:{}\nMaster Goals:{}\nMaster Sensor Reset:{}\n' \
-         'CVDown Target:{}\nCVForw Target:{}\nSonar Target:{}'.format(
+  status.set_text('BUFFER STATUS---------------------------\n' \
+         'Motor  Kill   : {}\nMotor  Health : {}\nMotor  Outputs: {}\n' \
+         'Sensor Lin    : {}\nSensor Ang    : {}\nSensor Data   : {}\n' \
+         'Master Control: {}\nMaster Goals  : {}\nMaster SensRes: {}\n' \
+         'CVDown Target : {}\nCVForw Target : {}\nSonar  Target : {}\n\n' \
+         'Kill Switch   : {}'.format(
             statusStrings[0], statusStrings[1], statusStrings[2], 
             statusStrings[3], statusStrings[4], statusStrings[5],
             statusStrings[6], statusStrings[7], statusStrings[8], 
-            statusStrings[9], statusStrings[10], statusStrings[11]))
-  
+            statusStrings[9], statusStrings[10], statusStrings[11],
+            
+            statusData[0]))
+  if mode == MODE_DEBUG:
+    debugStatus.set_text('BUFFER DEBUG----------------------------\n' \
+         '[Master Control]\n' \
+         'Ang X: vel: {} pos1: {} pos2: {}\n' \
+         'Ang Y: vel: {} pos1: {} pos2: {}\n' \
+         'Ang Z: vel: {} pos1: {} pos2: {}\n' \
+         'Lin X : vel: {} pos1: {} pos2: {}\n' \
+         'Lin Y : vel: {} pos1: {} pos2: {}\n' \
+         'Lin Z : vel: {} pos1: {} pos2: {}\n' \
+         'Mode  : {}'.format(
+         round(masterControlData[0][0][0], 3),
+         round(masterControlData[0][0][1], 3),
+         round(masterControlData[0][0][2], 3),
+         round(masterControlData[0][1][0], 3),
+         round(masterControlData[0][1][1], 3),
+         round(masterControlData[0][1][2], 3),
+         round(masterControlData[0][2][0], 3),
+         round(masterControlData[0][2][1], 3),
+         round(masterControlData[0][2][2], 3),
+         round(masterControlData[1][0][0], 3),
+         round(masterControlData[1][0][1], 3),
+         round(masterControlData[1][0][2], 3),
+         round(masterControlData[1][1][0], 3),
+         round(masterControlData[1][1][1], 3),
+         round(masterControlData[1][1][2], 3),
+         round(masterControlData[1][2][0], 3),
+         round(masterControlData[1][2][1], 3),
+         round(masterControlData[1][2][2], 3),
+         round(masterControlData[2][0][0], 3),))
+
 #Set up animation
 ani = animation.FuncAnimation(fig, animate, init_func = initFigure, 
                               interval = DELAY)
