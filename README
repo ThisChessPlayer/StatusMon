@@ -12,10 +12,16 @@ model of the robot alongside 3D rotation information.
 Dependencies:
   -matplotlib
   -numpy
-  -Python (2.7 and 3.5 officially supported)
+  -Python (2.7, 3.4, and 3.5 officially supported)
   -PythonSharedBuffers
   -DistributedSharedMemory
 -------------------------------------------------------------------------------
+07-24-16
+  -Statusmon now accepts command line args for setting status mode (demo or
+   live), initializing data (0 or random), and displaying help.
+  -Demostatusmon.py is now unneeded since its functionality has been merged 
+   back into statusmon.py, so it has been removed.
+
 07-23-16
   -Statusmon working with DSM servers/buffers, can successfully read from
    remote buffers and display data accordingly
