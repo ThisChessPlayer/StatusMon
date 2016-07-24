@@ -2,7 +2,7 @@
                                                          Author: Jason Ma
                                                          Date  : Jul 17 2016
    File Name  : statusmon.py
-   Description: Displays data from buffers that Cubeception 3 would write to.
+   Description: Displays data from buffers that Cubeception 3 writes to.
 ---*-----------------------------------------------------------------------*'''
 import sys
 sys.path.insert(0, '../DistributedSharedMemory/build')
@@ -26,61 +26,128 @@ from itertools import product, combinations
 import numpy as np
 from numpy import sin, cos
 
-NUM_TARGETS  = 2
-FIG_WIDTH    = 16
-FIG_HEIGHT   = 8
-FIG_NAME     = 'Cubeception 3 Status Monitor'
-PLOT_STYLE   = 'dark_background'
-LIGHT_GREEN  = (0, 1, 0, 1)
-DARK_GREEN   = (0, 0.5, 0, 1)
-LIGHT_RED    = (1, 0.75, 0.75, 1)
-DARK_RED     = (1, 0, 0, 1)
-LIGHT_YELLOW = (1, 1, 0, 1)
+'''[RUN VARS]---------------------------------------------------------------'''
+#DSM Constants
+CLIENT_SERV  = SONAR_SERVER_ID #server id to connect to
+CLIENT_ID    = 60              #client id to register to server
+NUM_BUFFERS  = 12              #number of buffers to read from
 
-bufNames = [MOTOR_KILL, MOTOR_HEALTH, MOTOR_OUTPUTS,
-            SENSORS_LINEAR, SENSORS_ANGULAR, SENSORS_DATA, 
-            MASTER_CONTROL, MASTER_GOALS, MASTER_SENSOR_RESET, 
-            TARGET_LOCATION, TARGET_LOCATION, TARGET_LOCATION]
-#bufIps = np.empty(11, dtype = object)
-bufIps = [MOTOR_SERVER_IP, MOTOR_SERVER_IP, MOTOR_SERVER_IP,
-          SENSOR_SERVER_IP, SENSOR_SERVER_IP, SENSOR_SERVER_IP, 
-          MASTER_SERVER_IP, MASTER_SERVER_IP, MASTER_SERVER_IP, 
+#Display Constants
+NUM_PL_LINES = 36   #number of polar theta lines to plot
+NUM_TARGETS  = 2    #number of targets to plot on polar targets viewer
+CUBE_POINTS  = 16   #number of points in cube orientation plot
+ARROW_POINTS = 8    #number of points in cube arrow plot
+NUM_MV_LINES = 11   #number o movement lines to plot
+HIST_LENGTH  = 50   #number of past data points to store for movement viewer
+DELAY        = 1000 #millisecond delay between drawings
+bufNames = [MOTOR_KILL,             MOTOR_HEALTH,              MOTOR_OUTPUTS,
+            SENSORS_LINEAR,         SENSORS_ANGULAR,           SENSORS_DATA, 
+            MASTER_CONTROL,         MASTER_GOALS,              MASTER_SENSOR_RESET,
+            TARGET_LOCATION,        TARGET_LOCATION,           TARGET_LOCATION]
+bufIps = [MOTOR_SERVER_IP,          MOTOR_SERVER_IP,           MOTOR_SERVER_IP,
+          SENSOR_SERVER_IP,         SENSOR_SERVER_IP,          SENSOR_SERVER_IP, 
+          MASTER_SERVER_IP,         MASTER_SERVER_IP,          MASTER_SERVER_IP, 
           FORWARD_VISION_SERVER_IP, DOWNWARD_VISION_SERVER_IP, SONAR_SERVER_IP]
-#bufIds = np.zeros((11))
-bufIds = [MOTOR_SERVER_ID, MOTOR_SERVER_ID, MOTOR_SERVER_ID,
-          SENSOR_SERVER_ID, SENSOR_SERVER_ID, SENSOR_SERVER_ID, 
-          MASTER_SERVER_ID, MASTER_SERVER_ID, MASTER_SERVER_ID, 
+bufIds = [MOTOR_SERVER_ID,          MOTOR_SERVER_ID,           MOTOR_SERVER_ID,
+          SENSOR_SERVER_ID,         SENSOR_SERVER_ID,          SENSOR_SERVER_ID, 
+          MASTER_SERVER_ID,         MASTER_SERVER_ID,          MASTER_SERVER_ID, 
           FORWARD_VISION_SERVER_ID, DOWNWARD_VISION_SERVER_ID, SONAR_SERVER_ID]
 
-'''initGlobals-----------------------------------------------------------------
-Generates figure and subplots, sets basic layout.
+FIG_WIDTH    = 16                             #aspect width
+FIG_HEIGHT   = 8                              #aspect height
+FIG_NAME     = 'Cubeception 3 Status Monitor' #name displayed in window
+PLOT_STYLE   = 'dark_background'              #background style
+LIGHT_GREEN  = (0, 1, 0, 1)                   #RGBA color
+DARK_GREEN   = (0, 0.5, 0, 1)                 #RGBA color
+LIGHT_RED    = (1, 0.75, 0.75, 1)             #RGBA color
+DARK_RED     = (1, 0, 0, 1)                   #RGBA color
+LIGHT_YELLOW = (1, 1, 0, 1)                   #RGBA color
+DPI_DISPLAY  = 100                            #Dots per inch of display
+FONT_SIZE    = 8                              #Default text font size
+TITLE_SIZE   = 10                             #Default title font size
+
+'''Init------------------------------------------------------------------------
+Generates figure and subplots, sets base layout and initializes data
 ----------------------------------------------------------------------------'''
-client = pydsm.Client(SONAR_SERVER_ID, 60, True)
-for i in range(12):
+
+'''[Connect to DSM Server]--------------------------------------------------'''
+#initialize client
+client = pydsm.Client(CLIENT_SERV, CLIENT_ID, True)
+
+#initialize remote buffers
+for i in range(NUM_BUFFERS):
   client.registerRemoteBuffer(bufNames[i], bufIps[i], int(bufIds[i]))
 
+'''[Initialize Figure/Subplots]---------------------------------------------'''
+#background style of figure
 plt.style.use(PLOT_STYLE)
 
+#set default matplotlib artist values
 mpl.rc(('text', 'xtick', 'ytick'), color = LIGHT_GREEN)
 mpl.rc(('lines', 'grid'), color = DARK_GREEN)
-mpl.rc('axes', edgecolor = LIGHT_GREEN, titlesize = 10)
-mpl.rc('font', size = 8)
+mpl.rc('axes', edgecolor = LIGHT_GREEN, titlesize = TITLE_SIZE)
+mpl.rc('font', size = FONT_SIZE)
 mpl.rc('grid', linestyle = ':')
 
-#most recent data
+#create figure with 16:8 (width:height) ratio
+fig = plt.figure(figsize = (FIG_WIDTH, FIG_HEIGHT), dpi = DPI_DISPLAY)
+fig.canvas.set_window_title(FIG_NAME)
+#fig.suptitle(FIG_NAME)
+  
+#create subplots on a 4 row 8 column grid
+ax1 = plt.subplot2grid((6, 12), (0, 0), rowspan = 6, colspan = 6, polar = True)
+ax2 = plt.subplot2grid((6, 12), (0, 6), rowspan = 3, colspan = 3, projection = '3d')
+ax3 = plt.subplot2grid((6, 12), (0, 9), rowspan = 2, colspan = 3)
+ax4 = plt.subplot2grid((6, 12), (3, 6), rowspan = 3, colspan = 3)
+ax5 = plt.subplot2grid((6, 12), (2, 9), rowspan = 4, colspan = 3)
+plt.tight_layout(pad = 2)
+
+'''[Initialize Data]--------------------------------------------------------'''
+#holds all displayed data from buffers
 data = np.zeros((9,4))
-data[0][0] = 3
+
+'''[Init Polar Targets]-----------------------------------------------------'''
+#default vision display
+data[0][0] = 0 #CV forw
 data[0][1] = 5
-data[0][2] = -4
+data[0][2] = 4
 data[0][3] = 0
 
-data[1][0] = 0
+data[1][0] = 0 #CV down
 data[1][1] = 0
 data[1][2] = -6
 data[1][3] = 256
 
-#past data
-dataHist = np.zeros((11, 50))
+#polar target marks and text
+cvfMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
+cvdMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
+cvfText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
+cvdText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
+
+'''[Init Orientation]-------------------------------------------------------'''
+#cube for orientation viewer
+cube = np.zeros((3, CUBE_POINTS))
+cube[0] = [-1, -1, -1, 1,  1, -1, -1,  1,  1, -1, -1, -1,  1,  1,  1,  1]
+cube[1] = [-1, -1,  1, 1,  1,  1, -1, -1, -1, -1,  1,  1,  1, -1, -1,  1]
+cube[2] = [-1,  1,  1, 1, -1, -1, -1, -1,  1,  1,  1, -1, -1, -1,  1,  1]
+cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], colors = LIGHT_GREEN)
+
+#arrow for locating front face of cube
+ca = np.zeros((3, ARROW_POINTS))
+ca[0] = [0, 2, 1.75,  1.75, 2, 1.75,  1.75, 2]
+ca[1] = [0, 0, 0.25, -0.25, 0,    0,     0, 0]
+ca[2] = [0, 0,    0,     0, 0, 0.25, -0.25, 0]
+cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
+
+'''[Init Heatmap]-----------------------------------------------------------'''
+#heatmap
+heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), cmap = 'RdBu', interpolation = 'nearest')
+
+'''[Init Movement]----------------------------------------------------------'''
+#past ax4 data to plot
+dataHist = np.zeros((NUM_MV_LINES, HIST_LENGTH))
+
+#random data to initialize with
 dataHist[0][49] = 1
 dataHist[1][44] = 2
 dataHist[2][39] = 4
@@ -93,51 +160,16 @@ dataHist[8][9] = 16
 dataHist[9][4] = 18
 dataHist[10][1] = 20
 
-#colors for ax2 plots
+#colors for ax4 plots
 colors = ['#ff0000', '#cf0000', '#8f0000', '#00ff00', '#00cf00', '#008f00',
           '#004f00', '#0000ff', '#0000cf', '#00008f', '#00004f']
 
-#create figure with 16:8 (width:height) ratio
-fig = plt.figure(figsize = (FIG_WIDTH, FIG_HEIGHT), dpi = 100)
-fig.canvas.set_window_title(FIG_NAME)
-#fig.suptitle(FIG_NAME)
-  
-#create subplots on a 4 row 8 column grid
-ax1 = plt.subplot2grid((6, 12), (0, 0), rowspan = 6, colspan = 6, polar = True)
-ax2 = plt.subplot2grid((6, 12), (0, 6), rowspan = 3, colspan = 3, projection = '3d')
-ax3 = plt.subplot2grid((6, 12), (0, 9), rowspan = 2, colspan = 3)
-ax4 = plt.subplot2grid((6, 12), (3, 6), rowspan = 3, colspan = 3)
-ax5 = plt.subplot2grid((6, 12), (2, 9), rowspan = 4, colspan = 3)
-plt.tight_layout(pad = 2)
-
-#polar target marks and text
-cvfMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
-cvdMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
-cvfText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
-cvdText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
-
-#cube for orientation viewer
-cube = np.zeros((3, 16))
-cube[0] = [-1, -1, -1, 1,  1, -1, -1,  1,  1, -1, -1, -1,  1,  1,  1,  1]
-cube[1] = [-1, -1,  1, 1,  1,  1, -1, -1, -1, -1,  1,  1,  1, -1, -1,  1]
-cube[2] = [-1,  1,  1, 1, -1, -1, -1, -1,  1,  1,  1, -1, -1, -1,  1,  1]
-cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], colors = LIGHT_GREEN)
-
-#arrow for locating front face of cube
-ca = np.zeros((3, 8))
-ca[0] = [0, 2, 1.75,  1.75, 2, 1.75,  1.75, 2]
-ca[1] = [0, 0, 0.25, -0.25, 0,    0,     0, 0]
-ca[2] = [0, 0,    0,     0, 0, 0.25, -0.25, 0]
-cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
-
-#heatmap
-heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), cmap = 'RdBu', interpolation = 'nearest')
-
 #position graph plots
-mLines = [ax4.plot([], '-', color = colors[j])[0] for j in range(11)]
+mLines = [ax4.plot([], '-', color = colors[j])[0] for j in range(NUM_MV_LINES)]
 
-statusStrings = np.empty(12, dtype = 'object')
-status = ax5.text(0.05, .70, '')
+'''[Init Status]------------------------------------------------------------'''
+statusStrings = np.empty(NUM_BUFFERS, dtype = 'object')
+status = ax5.text(0.05, .65, '')
 
 '''initPlot--------------------------------------------------------------------
 Sets up subplots and starting image of figure to display
@@ -153,7 +185,7 @@ def initFigure():
   ax1.set_theta_direction(-1)
   
   #format ticks and labels
-  ax1.set_thetagrids(np.linspace(0, 360, 36, endpoint = False), frac = 1.05)
+  ax1.set_thetagrids(np.linspace(0, 360, NUM_PL_LINES, endpoint = False), frac = 1.05)
   ax1.set_rlabel_position(90)
 
   #make ygridlines more visible (circular lines)
@@ -204,7 +236,7 @@ def initFigure():
   ax4.set_title('Movement')
   
   #set x scale
-  ax4.set_xticks(np.linspace(0, 50, 11))
+  ax4.set_xticks(np.linspace(0, HIST_LENGTH, NUM_MV_LINES))
   
   #enable grid
   ax4.grid(True)
@@ -267,115 +299,57 @@ def q_to_axisangle(q):
 Obtains most recent buffer data
 ----------------------------------------------------------------------------'''
 def getBufferData():
-  data[8][0] = 0
   
-  temp, active = client.getRemoteBufferContents(MOTOR_KILL, MOTOR_SERVER_IP, MOTOR_SERVER_ID)
-  if active:
-    temp = Unpack(Kill, temp)
-    data[8][1] = temp.isKilled
-    statusStrings[0] = 'Up  '
-  else:
-    statusStrings[0] = 'Down'
+  #temp = np.empty(NUM_BUFFERS, dtype = object)
+  for i in range(NUM_BUFFERS):
+    temp, active = client.getRemoteBufferContents(bufNames[i], bufIps[i], bufIds[i])
+    if active:
+      if i == 0:                          #Motor Kill
+        temp = Unpack(Kill, temp)
+        data[8][1] = temp.isKilled
+      elif i == 1:                        #Motor Health
+        temp = Unpack(Health, temp)
+        data[8][2] = temp.saturated
+        data[8][3] = temp.direction
+      elif i == 2:                        #Motor Outputs
+        temp = Unpack(Outputs, temp)
+        for j in range(4):
+          data[3][j] = temp.motors[j]
+        for j in range(4):
+          data[4][j] = temp.motors[j + 4]
+      elif i == 3:                        #Sensors Linear
+        temp = Unpack(Linear, temp)
+        for j in range(3):
+          data[5][j] = temp.pos[j]
+          data[6][j] = temp.vel[j]
+          data[7][j] = temp.acc[j]
+      elif i == 4:                        #Sensors Angular
+        temp = Unpack(Angular, temp)
+        for j in range(4):
+          data[2][j] = temp.pos[j]
+      #elif i == 5:                       #Sensors Data
+      #elif i == 6:                       #Master Control 
+      #elif i == 7:                       #Master Goals
+      #elif i == 8:                       #Master Sensor Reset
+      elif i == 9:                        #CV Forw Target Location
+        temp = Unpack(Location, temp)
+        data[0][0] = temp.x
+        data[0][1] = temp.y
+        data[0][2] = temp.z
+        data[0][3] = temp.confidence
+      elif i == 10:                       #CV Down Target Location
+        temp = Unpack(Location, temp)
+        data[1][0] = temp.x
+        data[1][1] = temp.y
+        data[1][2] = temp.z
+        data[1][3] = temp.confidence
+      #elif i == 11:                      #Sonar Target Location
 
-  temp, active = client.getRemoteBufferContents(MOTOR_HEALTH, MOTOR_SERVER_IP, MOTOR_SERVER_ID)
-  if active:
-    temp = Unpack(Health, temp)
-    data[8][2] = temp.saturated
-    data[8][3] = temp.direction
-    statusStrings[1] = 'Up  '
-  else:
-    statusStrings[1] = 'Down'
+      #Set status string to indicate whether buffer is up or down
+      statusStrings[i] = 'Up  '
+    else:
+      statusStrings[i] = 'Down'
   
-  temp, active = client.getRemoteBufferContents(MOTOR_OUTPUTS, MOTOR_SERVER_IP, MOTOR_SERVER_ID)
-  if active:
-    temp = Unpack(Outputs, temp)
-    for j in range(4):
-      data[3][j] = temp.motors[j]
-    for j in range(4):
-      data[4][j] = temp.motors[j + 4]
-    statusStrings[2] = 'Up  '
-  else:
-    statusStrings[2] = 'Down'
-  
-  temp, active = client.getRemoteBufferContents(SENSORS_LINEAR, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
-  if active:
-    temp = Unpack(Linear, temp)
-    for j in range(3):
-      data[5][j] = temp.pos[j]
-      data[6][j] = temp.vel[j]
-      data[7][j] = temp.acc[j]
-    statusStrings[3] = 'Up  '
-  else:
-    statusStrings[3] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(SENSORS_ANGULAR, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
-  #TODO can add more data in here later for the vel/acc angular fields
-  if active:
-    temp = Unpack(Angular, temp)
-    for j in range(4):
-      data[2][j] = temp.pos[j]
-    statusStrings[4] = 'Up  '
-  else:
-    statusStrings[4] = 'Down'
-
-
-  temp, active = client.getRemoteBufferContents(SENSORS_DATA, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
-  if active:
-    #temp = Unpack(Data, temp)
-    #data[] = 
-    statusStrings[5] = 'Up  '
-  else:
-    statusStrings[5] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(MASTER_CONTROL, MASTER_SERVER_IP, MASTER_SERVER_ID)
-  if active:
-    #temp = Unpack(#either AxisControl or ControlInput, temp))
-    statusStrings[6] = 'Up  '
-  else:
-    statusStrings[6] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(MASTER_GOALS, MASTER_SERVER_IP, MASTER_SERVER_ID)
-  if active:
-    #temp = Unpack(Goals, temp)
-    statusStrings[7] = 'Up  '
-  else:
-    statusStrings[7] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(MASTER_SENSOR_RESET, MASTER_SERVER_IP, MASTER_SERVER_ID)
-  if active:
-    #temp = Unpack(SensorReset, temp)
-    statusStrings[8] = 'Up  '
-  else:
-    statusStrings[8] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(TARGET_LOCATION, FORWARD_VISION_SERVER_IP, FORWARD_VISION_SERVER_ID)
-  if active: 
-    temp = Unpack(Location, temp)
-    data[0][0] = temp.x
-    data[0][1] = temp.y
-    data[0][2] = temp.z
-    data[0][3] = temp.confidence
-    statusStrings[9] = 'Up  '
-  else:
-    statusStrings[9] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(TARGET_LOCATION, DOWNWARD_VISION_SERVER_IP, DOWNWARD_VISION_SERVER_ID)
-  if active:
-    temp = Unpack(Location, temp)
-    data[1][0] = temp.x
-    data[1][1] = temp.y
-    data[1][2] = temp.z
-    data[1][3] = temp.confidence
-    statusStrings[10] = 'Up  '
-  else:
-    statusStrings[10] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(TARGET_LOCATION, SONAR_SERVER_IP, SONAR_SERVER_ID)
-  if active:
-    statusStrings[11] = 'Up  '
-  else:
-    statusStrings[11] = 'Down'
-
 '''animate---------------------------------------------------------------------
 Updates subplots of figure
 ----------------------------------------------------------------------------'''
@@ -383,19 +357,20 @@ def animate(i):
   
   global ax1, ax2, ax3, ax4, ax5, data, dataHist, cubeLines, cubeArrow
 
+  #Grab latest data to plot as well as info on whether buffers are online
   getBufferData()
   
   '''[Polar Targets]--------------------------------------------------------'''  
-  #determine max for scale adjustments
+  #Determine max for scale adjustments
   if data[0][1] > data[1][1]:
     max = data[0][1]
   else:
     max = data[1][1]
 
-  #adjust scale of ax1 to fit data nicely
+  #Adjust scale of ax1 to fit data nicely
   ax1.set_yticks(np.linspace(0, max * 6 / 5, 7))
 
-  #ensure statusmon doesn't crash if CV returns crazy values
+  #Ensure statusmon doesn't crash if CV returns crazy values
   if data[0][2] > 0:
     data[0][2] = 0
   elif data[0][2] < -10:
@@ -415,6 +390,7 @@ def animate(i):
     data[1][3] = 0
   elif data[1][3] > 255:
     data[1][3] = 255
+
   #update CV forward data
   cvfMark.set_data(data[0][0], data[0][1])
   cvfMark.set_color((1, data[0][2] / -10, 0, 1))
@@ -436,14 +412,14 @@ def animate(i):
                              data[1][0], data[1][1], data[1][2], data[1][3]))
 
   '''[Orientation]----------------------------------------------------------'''
+  #Only rotate model if stream is online
   if statusStrings[4] == 'Up  ':
     quat = (data[2][0], data[2][1], data[2][2], data[2][3])
   else:
+    #Default quaternion results in no rotation
     quat = (1, 0, 0, 0)
    
-  print(quat)
-   
-   #reset orientation of cube and arrow
+  #Reset orientation of cube and arrow
   cube[0] = [-1, -1, -1, 1,  1, -1, -1,  1,  1, -1, -1, -1,  1,  1,  1,  1]
   cube[1] = [-1, -1,  1, 1,  1,  1, -1, -1, -1, -1,  1,  1,  1, -1, -1,  1]
   cube[2] = [-1,  1,  1, 1, -1, -1, -1, -1,  1,  1,  1, -1, -1, -1,  1,  1]
@@ -452,59 +428,60 @@ def animate(i):
   ca[1] = [0, 0, 0.25, -0.25, 0,    0,     0, 0]
   ca[2] = [0, 0,    0,     0, 0, 0.25, -0.25, 0]
   
-  #apply transformation to all points of cube
+  #Apply transformation to all points of cube
   for j in range(16):
     v = qv_mult(quat, (cube[0][j], cube[1][j], cube[2][j]))
     cube[0][j] = v[0]
     cube[1][j] = v[1]
     cube[2][j] = v[2]
   
-  #apply transformation to all points of front facing arrow
+  #Apply transformation to all points of front facing arrow
   for j in range(8):
     v = qv_mult(quat, (ca[0][j], ca[1][j], ca[2][j]))
     ca[0][j] = v[0]
     ca[1][j] = v[1]
     ca[2][j] = v[2]
   
-  #remove old wireframes and plot new ones
+  #Remove old wireframes and plot new ones
   cubeLines.remove()
   cubeArrow.remove()  
   cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], colors = LIGHT_GREEN)
   cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
   
   '''[Thruster Heatmap]-----------------------------------------------------'''
+  #Map data to heatmap
   heatArray = [[data[4][0], data[4][1], 0, 0], [data[4][2], data[4][3], 0, 0], 
               [data[3][0], data[3][1], data[3][2], data[3][3]]]
   
-  #update motor heatmap
+  #Update motor heatmap
   heatmap.set_array(heatArray)
 
   '''[Movement]-------------------------------------------------------------'''
-  #update data for ax4 plots
-  moveX = np.linspace(0, 49, 50)
+  #Update data for ax4 plots
+  moveX = np.linspace(0, HIST_LENGTH - 1, HIST_LENGTH)
 
   #transfer data into data history
-  for j in range(11):
-    for k in range(49):
+  for j in range(NUM_MV_LINES):
+    for k in range(HIST_LENGTH - 1):
       dataHist[j][k] = dataHist[j][k + 1]
   for j in range(3):
-    dataHist[j][49] = data[5][j]
+    dataHist[j][HIST_LENGTH - 1] = data[5][j]
   for j in range(3):
-    dataHist[j + 3][49] = data[6][j]
+    dataHist[j + 3][HIST_LENGTH - 1] = data[6][j]
   for j in range(3):
-    dataHist[j + 7][49] = data[7][j]
-  dataHist[6][49] = pow(pow(data[6][0], 2) + pow(data[6][1], 2) + pow(data[6][2], 2), 1/2)
-  dataHist[10][49] = pow(pow(data[7][0], 2) + pow(data[7][1], 2) + pow(data[7][2], 2), 1/2)
+    dataHist[j + 7][HIST_LENGTH - 1] = data[7][j]
+  dataHist[6][HIST_LENGTH - 1] = pow(pow(data[6][0], 2) + pow(data[6][1], 2) + pow(data[6][2], 2), 1/2)
+  dataHist[10][HIST_LENGTH - 1] = pow(pow(data[7][0], 2) + pow(data[7][1], 2) + pow(data[7][2], 2), 1/2)
 
   #update data for each plot
-  for j in range(11):
+  for j in range(NUM_MV_LINES):
     mLines[j].set_data(moveX, dataHist[j])
   
   #determine highest value to scale y axis properly
   ymax = dataHist[0][0]
   ymin = dataHist[0][0]
-  for j in range(11):
-    for k in range(50):
+  for j in range(NUM_MV_LINES):
+    for k in range(HIST_LENGTH):
       if dataHist[j][k] > ymax:
         ymax = dataHist[j][k]
       elif dataHist[j][k] < ymin:
@@ -518,17 +495,17 @@ def animate(i):
     ax4.set_yticks(movementTicks)
 
   #update legend with latest data values
-  ax4.legend(['px:{}'.format(dataHist[0][49]),
-              'py:{}'.format(dataHist[1][49]),
-              'py:{}'.format(dataHist[2][49]),
-              'vx:{}'.format(dataHist[3][49]),
-              'vy:{}'.format(dataHist[4][49]),
-              'vz:{}'.format(dataHist[5][49]),
-              'vt:{}'.format(dataHist[6][49]),
-              'ax:{}'.format(dataHist[7][49]),
-              'ay:{}'.format(dataHist[8][49]),
-              'az:{}'.format(dataHist[9][49]),
-              'at:{}'.format(dataHist[10][49])], 
+  ax4.legend(['px:{}'.format(dataHist[0][HIST_LENGTH - 1]),
+              'py:{}'.format(dataHist[1][HIST_LENGTH - 1]),
+              'py:{}'.format(dataHist[2][HIST_LENGTH - 1]),
+              'vx:{}'.format(dataHist[3][HIST_LENGTH - 1]),
+              'vy:{}'.format(dataHist[4][HIST_LENGTH - 1]),
+              'vz:{}'.format(dataHist[5][HIST_LENGTH - 1]),
+              'vt:{}'.format(dataHist[6][HIST_LENGTH - 1]),
+              'ax:{}'.format(dataHist[7][HIST_LENGTH - 1]),
+              'ay:{}'.format(dataHist[8][HIST_LENGTH - 1]),
+              'az:{}'.format(dataHist[9][HIST_LENGTH - 1]),
+              'at:{}'.format(dataHist[10][HIST_LENGTH - 1])], 
               loc = 'upper left', numpoints = 1)
 
   '''[Multiple Axes]--------------------------------------------------------'''
@@ -550,8 +527,7 @@ def animate(i):
   
 #set up animation
 ani = animation.FuncAnimation(fig, animate, init_func = initFigure, 
-                              interval = 1000)
+                              interval = DELAY)
 
 #show the figure
 plt.show()
-

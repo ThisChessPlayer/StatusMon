@@ -16,6 +16,11 @@ Dependencies:
   -PythonSharedBuffers
   -DistributedSharedMemory
 -------------------------------------------------------------------------------
+07-23-16
+  -Statusmon working with DSM servers/buffers, can successfully read from
+   remote buffers and display data accordingly
+  -Made much more modifiable with run constants for quick changes
+
 07-22-16
   -Separated statusmon into demo and run configurations
   -Buffer support added, successfully reads whether buffers are active and gets
