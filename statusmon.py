@@ -3,6 +3,9 @@
                                                          Date  : Jul 17 2016
    File Name  : statusmon.py
    Description: Displays data from buffers that Cubeception 3 writes to.
+                The monitor includes a polar graph for targets, orientation 
+                viewer, thruster heatmap, location/velocity/acceleration plots,
+                and buffer status messages. 
 ---*-----------------------------------------------------------------------*'''
 import sys
 sys.path.insert(0, '../DistributedSharedMemory/build')
@@ -28,18 +31,18 @@ from numpy import sin, cos
 
 '''[RUN VARS]---------------------------------------------------------------'''
 #DSM Constants
-CLIENT_SERV  = SONAR_SERVER_ID #server id to connect to
-CLIENT_ID    = 60              #client id to register to server
-NUM_BUFFERS  = 12              #number of buffers to read from
+CLIENT_SERV  = SONAR_SERVER_ID #Server id to connect to
+CLIENT_ID    = 60              #Client id to register to server
+NUM_BUFFERS  = 12              #Number of buffers to read from
 
 #Display Constants
-NUM_PL_LINES = 36   #number of polar theta lines to plot
-NUM_TARGETS  = 2    #number of targets to plot on polar targets viewer
-CUBE_POINTS  = 16   #number of points in cube orientation plot
-ARROW_POINTS = 8    #number of points in cube arrow plot
-NUM_MV_LINES = 11   #number o movement lines to plot
-HIST_LENGTH  = 50   #number of past data points to store for movement viewer
-DELAY        = 1000 #millisecond delay between drawings
+NUM_PL_LINES = 36   #Number of polar theta lines to plot
+NUM_TARGETS  = 2    #Number of targets to plot on polar targets viewer
+CUBE_POINTS  = 16   #Number of points in cube orientation plot
+ARROW_POINTS = 8    #Number of points in cube arrow plot
+NUM_MV_LINES = 11   #Number o movement lines to plot
+HIST_LENGTH  = 50   #Number of past data points to store for movement viewer
+DELAY        = 1000 #Millisecond delay between drawings
 bufNames = [MOTOR_KILL,             MOTOR_HEALTH,              MOTOR_OUTPUTS,
             SENSORS_LINEAR,         SENSORS_ANGULAR,           SENSORS_DATA, 
             MASTER_CONTROL,         MASTER_GOALS,              MASTER_SENSOR_RESET,
@@ -53,10 +56,10 @@ bufIds = [MOTOR_SERVER_ID,          MOTOR_SERVER_ID,           MOTOR_SERVER_ID,
           MASTER_SERVER_ID,         MASTER_SERVER_ID,          MASTER_SERVER_ID, 
           FORWARD_VISION_SERVER_ID, DOWNWARD_VISION_SERVER_ID, SONAR_SERVER_ID]
 
-FIG_WIDTH    = 16                             #aspect width
-FIG_HEIGHT   = 8                              #aspect height
-FIG_NAME     = 'Cubeception 3 Status Monitor' #name displayed in window
-PLOT_STYLE   = 'dark_background'              #background style
+FIG_WIDTH    = 16                             #Aspect width
+FIG_HEIGHT   = 8                              #Aspect height
+FIG_NAME     = 'Cubeception 3 Status Monitor' #Name displayed in window
+PLOT_STYLE   = 'dark_background'              #Background style
 LIGHT_GREEN  = (0, 1, 0, 1)                   #RGBA color
 DARK_GREEN   = (0, 0.5, 0, 1)                 #RGBA color
 LIGHT_RED    = (1, 0.75, 0.75, 1)             #RGBA color
@@ -71,30 +74,30 @@ Generates figure and subplots, sets base layout and initializes data
 ----------------------------------------------------------------------------'''
 
 '''[Connect to DSM Server]--------------------------------------------------'''
-#initialize client
+#Initialize client
 client = pydsm.Client(CLIENT_SERV, CLIENT_ID, True)
 
-#initialize remote buffers
+#Initialize remote buffers
 for i in range(NUM_BUFFERS):
   client.registerRemoteBuffer(bufNames[i], bufIps[i], int(bufIds[i]))
 
 '''[Initialize Figure/Subplots]---------------------------------------------'''
-#background style of figure
+#Background style of figure
 plt.style.use(PLOT_STYLE)
 
-#set default matplotlib artist values
+#Set default matplotlib artist values
 mpl.rc(('text', 'xtick', 'ytick'), color = LIGHT_GREEN)
 mpl.rc(('lines', 'grid'), color = DARK_GREEN)
 mpl.rc('axes', edgecolor = LIGHT_GREEN, titlesize = TITLE_SIZE)
 mpl.rc('font', size = FONT_SIZE)
 mpl.rc('grid', linestyle = ':')
 
-#create figure with 16:8 (width:height) ratio
+#Create figure with 16:8 (width:height) ratio
 fig = plt.figure(figsize = (FIG_WIDTH, FIG_HEIGHT), dpi = DPI_DISPLAY)
 fig.canvas.set_window_title(FIG_NAME)
-#fig.suptitle(FIG_NAME)
+#fig.suptitle(FIG_NAME)   #Would set name of subplot
   
-#create subplots on a 4 row 8 column grid
+#Create subplots on a 4 row 8 column grid
 ax1 = plt.subplot2grid((6, 12), (0, 0), rowspan = 6, colspan = 6, polar = True)
 ax2 = plt.subplot2grid((6, 12), (0, 6), rowspan = 3, colspan = 3, projection = '3d')
 ax3 = plt.subplot2grid((6, 12), (0, 9), rowspan = 2, colspan = 3)
@@ -103,11 +106,11 @@ ax5 = plt.subplot2grid((6, 12), (2, 9), rowspan = 4, colspan = 3)
 plt.tight_layout(pad = 2)
 
 '''[Initialize Data]--------------------------------------------------------'''
-#holds all displayed data from buffers
+#Holds all displayed data from buffers
 data = np.zeros((9,4))
 
 '''[Init Polar Targets]-----------------------------------------------------'''
-#default vision display
+#Default vision display
 data[0][0] = 0 #CV forw
 data[0][1] = 5
 data[0][2] = 4
@@ -118,21 +121,21 @@ data[1][1] = 0
 data[1][2] = -6
 data[1][3] = 256
 
-#polar target marks and text
+#Polar target marks and text
 cvfMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
 cvdMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
 cvfText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
 cvdText = ax1.text(0, 0, '', bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
 
 '''[Init Orientation]-------------------------------------------------------'''
-#cube for orientation viewer
+#Cube for orientation viewer
 cube = np.zeros((3, CUBE_POINTS))
 cube[0] = [-1, -1, -1, 1,  1, -1, -1,  1,  1, -1, -1, -1,  1,  1,  1,  1]
 cube[1] = [-1, -1,  1, 1,  1,  1, -1, -1, -1, -1,  1,  1,  1, -1, -1,  1]
 cube[2] = [-1,  1,  1, 1, -1, -1, -1, -1,  1,  1,  1, -1, -1, -1,  1,  1]
 cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], colors = LIGHT_GREEN)
 
-#arrow for locating front face of cube
+#Arrow for locating front face of cube
 ca = np.zeros((3, ARROW_POINTS))
 ca[0] = [0, 2, 1.75,  1.75, 2, 1.75,  1.75, 2]
 ca[1] = [0, 0, 0.25, -0.25, 0,    0,     0, 0]
@@ -140,14 +143,14 @@ ca[2] = [0, 0,    0,     0, 0, 0.25, -0.25, 0]
 cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
 
 '''[Init Heatmap]-----------------------------------------------------------'''
-#heatmap
+#Heatmap
 heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), cmap = 'RdBu', interpolation = 'nearest')
 
 '''[Init Movement]----------------------------------------------------------'''
-#past ax4 data to plot
+#Past ax4 data to plot
 dataHist = np.zeros((NUM_MV_LINES, HIST_LENGTH))
 
-#random data to initialize with
+#Random data to initialize with
 dataHist[0][49] = 1
 dataHist[1][44] = 2
 dataHist[2][39] = 4
@@ -160,11 +163,11 @@ dataHist[8][9] = 16
 dataHist[9][4] = 18
 dataHist[10][1] = 20
 
-#colors for ax4 plots
+#Colors for ax4 plots
 colors = ['#ff0000', '#cf0000', '#8f0000', '#00ff00', '#00cf00', '#008f00',
           '#004f00', '#0000ff', '#0000cf', '#00008f', '#00004f']
 
-#position graph plots
+#Initialize position graph plots
 mLines = [ax4.plot([], '-', color = colors[j])[0] for j in range(NUM_MV_LINES)]
 
 '''[Init Status]------------------------------------------------------------'''
@@ -177,72 +180,72 @@ Sets up subplots and starting image of figure to display
 def initFigure():
 
   '''[Polar Targets]--------------------------------------------------------'''
-  #set title
+  #Set subplot title
   ax1.set_title('Targets')
   
-  #set label locations appropriately
+  #Set label locations appropriately
   ax1.set_theta_zero_location("N")
   ax1.set_theta_direction(-1)
   
-  #format ticks and labels
+  #Format ticks and labels
   ax1.set_thetagrids(np.linspace(0, 360, NUM_PL_LINES, endpoint = False), frac = 1.05)
   ax1.set_rlabel_position(90)
 
-  #make ygridlines more visible (circular lines)
+  #Make ygridlines more visible (circular lines)
   for line in ax1.get_ygridlines():
     line.set_color(LIGHT_GREEN)
   
   '''[Orientation]----------------------------------------------------------'''
-  #set title
+  #Set subplot title
   ax2.set_title('Orientation')
 
-  #enable grid
+  #Enable grid
   ax2.grid(b = False)
   
-  #set color of backgrounds
+  #Set color of backgrounds
   ax2.w_xaxis.set_pane_color((0, 0.075, 0, 1))
   ax2.w_yaxis.set_pane_color((0, 0.075, 0, 1))
   ax2.w_zaxis.set_pane_color((0, 0.125, 0, 1))
 
-  #set color of axis lines
+  #Set color of axis lines
   ax2.w_xaxis.line.set_color(LIGHT_GREEN)
   ax2.w_yaxis.line.set_color(LIGHT_GREEN)
   ax2.w_zaxis.line.set_color(LIGHT_GREEN)
 
-  #set tick lines
+  #Set tick lines
   ax2.set_xticks([])
   ax2.set_yticks([])
   ax2.set_zticks([])
 
-  #set green axis labels
+  #Set green axis labels
   ax2.set_xlabel('X axis', color = LIGHT_GREEN)
   ax2.set_ylabel('Y axis', color = LIGHT_GREEN)
   ax2.set_zlabel('Z axis', color = LIGHT_GREEN)
 
   '''[Thruster Heatmap]-----------------------------------------------------'''
-  #set title
+  #Set subplot title
   ax3.set_title('Thruster Heatmap')
 
-  #set ticks to properly extract parts of data
+  #Set ticks to properly extract parts of data
   ax3.set_xticks([0, 1, 2, 3])
   ax3.set_yticks([0, 1, 2])
 
-  #label ticks so they correspond to motors
+  #Label ticks so they correspond to motors
   ax3.set_xticklabels(['1', '2', '3', '4'])
   ax3.set_yticklabels(['X', 'Y', 'Z'])
   
   '''[Position/Velocity/Acceleration]---------------------------------------'''
-  #set title
+  #Set subplot title
   ax4.set_title('Movement')
   
-  #set x scale
+  #Set x scale
   ax4.set_xticks(np.linspace(0, HIST_LENGTH, NUM_MV_LINES))
   
-  #enable grid
+  #Enable grid
   ax4.grid(True)
 
   '''[Status]---------------------------------------------------------------'''
-  #set title
+  #Set subplot title
   ax5.set_title('Status')
 
   '''[Multiple Axes]--------------------------------------------------------'''
@@ -300,17 +303,17 @@ Obtains most recent buffer data
 ----------------------------------------------------------------------------'''
 def getBufferData():
   
-  #temp = np.empty(NUM_BUFFERS, dtype = object)
+  #Check each buffer's status and update data array if active
   for i in range(NUM_BUFFERS):
     temp, active = client.getRemoteBufferContents(bufNames[i], bufIps[i], bufIds[i])
     if active:
       if i == 0:                          #Motor Kill
         temp = Unpack(Kill, temp)
-        data[8][1] = temp.isKilled
+        data[8][0] = temp.isKilled
       elif i == 1:                        #Motor Health
         temp = Unpack(Health, temp)
-        data[8][2] = temp.saturated
-        data[8][3] = temp.direction
+        data[8][1] = temp.saturated
+        data[8][2] = temp.direction
       elif i == 2:                        #Motor Outputs
         temp = Unpack(Outputs, temp)
         for j in range(4):
@@ -391,22 +394,22 @@ def animate(i):
   elif data[1][3] > 255:
     data[1][3] = 255
 
-  #update CV forward data
+  #Update CV forward data
   cvfMark.set_data(data[0][0], data[0][1])
   cvfMark.set_color((1, data[0][2] / -10, 0, 1))
   cvfMark.set_markersize(20 - data[0][3] * 5 / 128)
 
-  #update CV down data
+  #Update CV down data
   cvdMark.set_data(data[1][0], data[1][1])
   cvdMark.set_color((1, data[1][2] / -20 + 0.5, 0, 1))
   cvdMark.set_markersize(20 - data[1][3] * 5 / 128)
 
-  #CV forward text
+  #Update CV forward text
   cvfText.set_position((data[0][0], data[0][1]))  
   cvfText.set_text('CVForw\nx:{0:5.3f}\ny:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
                              data[0][0], data[0][1], data[0][2], data[0][3]))
 
-  #CV down text
+  #Update CV down text
   cvdText.set_position((data[1][0], data[1][1]))  
   cvdText.set_text('CVDown\nx:{0:5.3f}\ny:{1:5.3f}\nz:{2:5.3f}\nc:{3}'.format(
                              data[1][0], data[1][1], data[1][2], data[1][3]))
@@ -460,7 +463,7 @@ def animate(i):
   #Update data for ax4 plots
   moveX = np.linspace(0, HIST_LENGTH - 1, HIST_LENGTH)
 
-  #transfer data into data history
+  #Transfer data into data history
   for j in range(NUM_MV_LINES):
     for k in range(HIST_LENGTH - 1):
       dataHist[j][k] = dataHist[j][k + 1]
@@ -470,14 +473,16 @@ def animate(i):
     dataHist[j + 3][HIST_LENGTH - 1] = data[6][j]
   for j in range(3):
     dataHist[j + 7][HIST_LENGTH - 1] = data[7][j]
+
+  #Calculate total velocity/acceleration
   dataHist[6][HIST_LENGTH - 1] = pow(pow(data[6][0], 2) + pow(data[6][1], 2) + pow(data[6][2], 2), 1/2)
   dataHist[10][HIST_LENGTH - 1] = pow(pow(data[7][0], 2) + pow(data[7][1], 2) + pow(data[7][2], 2), 1/2)
 
-  #update data for each plot
+  #Update data for each plot
   for j in range(NUM_MV_LINES):
     mLines[j].set_data(moveX, dataHist[j])
   
-  #determine highest value to scale y axis properly
+  #Determine highest value to scale y axis properly
   ymax = dataHist[0][0]
   ymin = dataHist[0][0]
   for j in range(NUM_MV_LINES):
@@ -487,14 +492,14 @@ def animate(i):
       elif dataHist[j][k] < ymin:
         ymin = dataHist[j][k]
 
-  #scale ax4 plot
+  #Scale ax4 plot
   ax4.set_ylim(ymin, ymax + (ymax - ymin) / 5)
 
   if(ymin != ymax):
     movementTicks = np.linspace(ymin, ymax + (ymax - ymin) / 5, 7)
     ax4.set_yticks(movementTicks)
 
-  #update legend with latest data values
+  #Update legend with latest data values
   ax4.legend(['px:{}'.format(dataHist[0][HIST_LENGTH - 1]),
               'py:{}'.format(dataHist[1][HIST_LENGTH - 1]),
               'py:{}'.format(dataHist[2][HIST_LENGTH - 1]),
@@ -509,25 +514,20 @@ def animate(i):
               loc = 'upper left', numpoints = 1)
 
   '''[Multiple Axes]--------------------------------------------------------'''
+  #Update status text
+  status.set_text('Buffer Status:\n' \
+         'Motor Kill:{}\nMotor Health:{}\nMotor Outputs:{}\n' \
+         'Sensor Lin:{}\nSensor Ang:{}\nSensor Data:{}\n' \
+         'Master Control:{}\nMaster Goals:{}\nMaster Sensor Reset:{}\n' \
+         'CVDown Target:{}\nCVForw Target:{}\nSonar Target:{}'.format(
+            statusStrings[0], statusStrings[1], statusStrings[2], 
+            statusStrings[3], statusStrings[4], statusStrings[5],
+            statusStrings[6], statusStrings[7], statusStrings[8], 
+            statusStrings[9], statusStrings[10], statusStrings[11]))
   
-  status.set_text('Buffer Status:\nMotor Kill:{}\nMotor Health:{}\nMotor Outputs:{}\nSensor Lin:{}\nSensor Ang:{}\nSensor Data:{}\nMaster Control:{}\nMaster Goals:{}\nMaster Sensor Reset:{}\nCVDown Target:{}\nCVForw Target:{}\nSonar Target:{}'.format(
-                   statusStrings[0], 
-                   statusStrings[1], 
-                   statusStrings[2], 
-                   statusStrings[3],
-                   statusStrings[4], 
-                   statusStrings[5],
-                   statusStrings[6], 
-                   statusStrings[7],
-                   statusStrings[8], 
-                   statusStrings[9],
-                   statusStrings[10], 
-                   statusStrings[11]
-                   ))
-  
-#set up animation
+#Set up animation
 ani = animation.FuncAnimation(fig, animate, init_func = initFigure, 
                               interval = DELAY)
 
-#show the figure
+#Show the figure
 plt.show()
