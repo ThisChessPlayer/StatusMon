@@ -26,18 +26,6 @@ from itertools import product, combinations
 import numpy as np
 from numpy import sin, cos
 
-MOTOR_KILL_A_BIT     = 1
-MOTOR_HEALTH_A_BIT   = 1 << 1
-SENSOR_LIN_A_BIT     = 1 << 2
-SENSOR_ANG_A_BIT     = 1 << 3
-SENSOR_DATA_A_BIT    = 1 << 4
-MASTER_CON_A_BIT     = 1 << 5
-MASTER_GOALS_A_BIT   = 1 << 6
-MASTER_SENSRES_A_BIT = 1 << 7
-VIS_FORW_A_BIT       = 1 << 8
-VIS_DOWN_A_BIT       = 1 << 9
-SON_TARG_A_BIT       = 1 << 10
-
 NUM_TARGETS  = 2
 FIG_WIDTH    = 16
 FIG_HEIGHT   = 8
@@ -49,10 +37,27 @@ LIGHT_RED    = (1, 0.75, 0.75, 1)
 DARK_RED     = (1, 0, 0, 1)
 LIGHT_YELLOW = (1, 1, 0, 1)
 
+bufNames = [MOTOR_KILL, MOTOR_HEALTH, MOTOR_OUTPUTS,
+            SENSORS_LINEAR, SENSORS_ANGULAR, SENSORS_DATA, 
+            MASTER_CONTROL, MASTER_GOALS, MASTER_SENSOR_RESET, 
+            TARGET_LOCATION, TARGET_LOCATION, TARGET_LOCATION]
+#bufIps = np.empty(11, dtype = object)
+bufIps = [MOTOR_SERVER_IP, MOTOR_SERVER_IP, MOTOR_SERVER_IP,
+          SENSOR_SERVER_IP, SENSOR_SERVER_IP, SENSOR_SERVER_IP, 
+          MASTER_SERVER_IP, MASTER_SERVER_IP, MASTER_SERVER_IP, 
+          FORWARD_VISION_SERVER_IP, DOWNWARD_VISION_SERVER_IP, SONAR_SERVER_IP]
+#bufIds = np.zeros((11))
+bufIds = [MOTOR_SERVER_ID, MOTOR_SERVER_ID, MOTOR_SERVER_ID,
+          SENSOR_SERVER_ID, SENSOR_SERVER_ID, SENSOR_SERVER_ID, 
+          MASTER_SERVER_ID, MASTER_SERVER_ID, MASTER_SERVER_ID, 
+          FORWARD_VISION_SERVER_ID, DOWNWARD_VISION_SERVER_ID, SONAR_SERVER_ID]
+
 '''initGlobals-----------------------------------------------------------------
 Generates figure and subplots, sets basic layout.
 ----------------------------------------------------------------------------'''
 client = pydsm.Client(SONAR_SERVER_ID, 60, True)
+for i in range(12):
+  client.registerRemoteBuffer(bufNames[i], bufIps[i], int(bufIds[i]))
 
 plt.style.use(PLOT_STYLE)
 
@@ -131,8 +136,8 @@ heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), cmap = 'RdBu', interpolat
 #position graph plots
 mLines = [ax4.plot([], '-', color = colors[j])[0] for j in range(11)]
 
-statusStrings = np.empty(11, dtype = 'S4')
-status = ax5.text(0, 0, '')
+statusStrings = np.empty(12, dtype = 'object')
+status = ax5.text(0.05, .70, '')
 
 '''initPlot--------------------------------------------------------------------
 Sets up subplots and starting image of figure to display
@@ -263,7 +268,7 @@ Obtains most recent buffer data
 ----------------------------------------------------------------------------'''
 def getBufferData():
   data[8][0] = 0
-
+  
   temp, active = client.getRemoteBufferContents(MOTOR_KILL, MOTOR_SERVER_IP, MOTOR_SERVER_ID)
   if active:
     temp = Unpack(Kill, temp)
@@ -280,55 +285,68 @@ def getBufferData():
     statusStrings[1] = 'Up  '
   else:
     statusStrings[1] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(SENSORS_LINEAR, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
+  
+  temp, active = client.getRemoteBufferContents(MOTOR_OUTPUTS, MOTOR_SERVER_IP, MOTOR_SERVER_ID)
   if active:
-    temp = Unpack(Linear, temp)
-    data[5] = temp.pos #TODO double check to make sure this works later on
-    data[6] = temp.vel
-    data[7] = temp.acc
+    temp = Unpack(Outputs, temp)
+    for j in range(4):
+      data[3][j] = temp.motors[j]
+    for j in range(4):
+      data[4][j] = temp.motors[j + 4]
     statusStrings[2] = 'Up  '
   else:
     statusStrings[2] = 'Down'
+  
+  temp, active = client.getRemoteBufferContents(SENSORS_LINEAR, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
+  if active:
+    temp = Unpack(Linear, temp)
+    for j in range(3):
+      data[5][j] = temp.pos[j]
+      data[6][j] = temp.vel[j]
+      data[7][j] = temp.acc[j]
+    statusStrings[3] = 'Up  '
+  else:
+    statusStrings[3] = 'Down'
 
   temp, active = client.getRemoteBufferContents(SENSORS_ANGULAR, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
   #TODO can add more data in here later for the vel/acc angular fields
   if active:
     temp = Unpack(Angular, temp)
-    data[2] = temp.pos
-    statusStrings[3] = 'Up  '
+    for j in range(4):
+      data[2][j] = temp.pos[j]
+    statusStrings[4] = 'Up  '
   else:
-    statusStrings[3] = 'Down'
+    statusStrings[4] = 'Down'
 
 
   temp, active = client.getRemoteBufferContents(SENSORS_DATA, SENSOR_SERVER_IP, SENSOR_SERVER_ID)
   if active:
     #temp = Unpack(Data, temp)
     #data[] = 
-    statusStrings[4] = 'Up  '
-  else:
-    statusStrings[4] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(MASTER_CONTROL, MASTER_SERVER_IP, MASTER_SERVER_ID)
-  if active:
-    #temp = Unpack(#either AxisControl or ControlInput, temp))
     statusStrings[5] = 'Up  '
   else:
     statusStrings[5] = 'Down'
 
-  temp, active = client.getRemoteBufferContents(MASTER_GOALS, MASTER_SERVER_IP, MASTER_SERVER_ID)
+  temp, active = client.getRemoteBufferContents(MASTER_CONTROL, MASTER_SERVER_IP, MASTER_SERVER_ID)
   if active:
-    #temp = Unpack(Goals, temp)
+    #temp = Unpack(#either AxisControl or ControlInput, temp))
     statusStrings[6] = 'Up  '
   else:
     statusStrings[6] = 'Down'
 
-  temp, active = client.getRemoteBufferContents(MASTER_SENSOR_RESET, MASTER_SERVER_IP, MASTER_SERVER_ID)
+  temp, active = client.getRemoteBufferContents(MASTER_GOALS, MASTER_SERVER_IP, MASTER_SERVER_ID)
   if active:
-    #temp = Unpack(SensorReset, temp)
+    #temp = Unpack(Goals, temp)
     statusStrings[7] = 'Up  '
   else:
     statusStrings[7] = 'Down'
+
+  temp, active = client.getRemoteBufferContents(MASTER_SENSOR_RESET, MASTER_SERVER_IP, MASTER_SERVER_ID)
+  if active:
+    #temp = Unpack(SensorReset, temp)
+    statusStrings[8] = 'Up  '
+  else:
+    statusStrings[8] = 'Down'
 
   temp, active = client.getRemoteBufferContents(TARGET_LOCATION, FORWARD_VISION_SERVER_IP, FORWARD_VISION_SERVER_ID)
   if active: 
@@ -337,9 +355,9 @@ def getBufferData():
     data[0][1] = temp.y
     data[0][2] = temp.z
     data[0][3] = temp.confidence
-    statusStrings[8] = 'Up  '
+    statusStrings[9] = 'Up  '
   else:
-    statusStrings[8] = 'Down'
+    statusStrings[9] = 'Down'
 
   temp, active = client.getRemoteBufferContents(TARGET_LOCATION, DOWNWARD_VISION_SERVER_IP, DOWNWARD_VISION_SERVER_ID)
   if active:
@@ -348,17 +366,16 @@ def getBufferData():
     data[1][1] = temp.y
     data[1][2] = temp.z
     data[1][3] = temp.confidence
-    statusStrings[9] = 'Up  '
-  else:
-    statusStrings[9] = 'Down'
-
-  temp, active = client.getRemoteBufferContents(TARGET_LOCATION, SONAR_SERVER_IP, SONAR_SERVER_ID)
-  if active:
     statusStrings[10] = 'Up  '
   else:
     statusStrings[10] = 'Down'
 
-  
+  temp, active = client.getRemoteBufferContents(TARGET_LOCATION, SONAR_SERVER_IP, SONAR_SERVER_ID)
+  if active:
+    statusStrings[11] = 'Up  '
+  else:
+    statusStrings[11] = 'Down'
+
 '''animate---------------------------------------------------------------------
 Updates subplots of figure
 ----------------------------------------------------------------------------'''
@@ -368,8 +385,6 @@ def animate(i):
 
   getBufferData()
   
-  #copy pos/vel/acc data to dataHist
-
   '''[Polar Targets]--------------------------------------------------------'''  
   #determine max for scale adjustments
   if data[0][1] > data[1][1]:
@@ -421,7 +436,21 @@ def animate(i):
                              data[1][0], data[1][1], data[1][2], data[1][3]))
 
   '''[Orientation]----------------------------------------------------------'''
-  quat = (data[2][0], data[2][1], data[2][2], data[2][3])
+  if statusStrings[4] == 'Up  ':
+    quat = (data[2][0], data[2][1], data[2][2], data[2][3])
+  else:
+    quat = (1, 0, 0, 0)
+   
+  print(quat)
+   
+   #reset orientation of cube and arrow
+  cube[0] = [-1, -1, -1, 1,  1, -1, -1,  1,  1, -1, -1, -1,  1,  1,  1,  1]
+  cube[1] = [-1, -1,  1, 1,  1,  1, -1, -1, -1, -1,  1,  1,  1, -1, -1,  1]
+  cube[2] = [-1,  1,  1, 1, -1, -1, -1, -1,  1,  1,  1, -1, -1, -1,  1,  1]
+
+  ca[0] = [0, 2, 1.75,  1.75, 2, 1.75,  1.75, 2]
+  ca[1] = [0, 0, 0.25, -0.25, 0,    0,     0, 0]
+  ca[2] = [0, 0,    0,     0, 0, 0.25, -0.25, 0]
   
   #apply transformation to all points of cube
   for j in range(16):
@@ -442,7 +471,7 @@ def animate(i):
   cubeArrow.remove()  
   cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], colors = LIGHT_GREEN)
   cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
-
+  
   '''[Thruster Heatmap]-----------------------------------------------------'''
   heatArray = [[data[4][0], data[4][1], 0, 0], [data[4][2], data[4][3], 0, 0], 
               [data[3][0], data[3][1], data[3][2], data[3][3]]]
@@ -454,19 +483,16 @@ def animate(i):
   #update data for ax4 plots
   moveX = np.linspace(0, 49, 50)
 
+  #transfer data into data history
   for j in range(11):
     for k in range(49):
       dataHist[j][k] = dataHist[j][k + 1]
-  
   for j in range(3):
     dataHist[j][49] = data[5][j]
-  
   for j in range(3):
     dataHist[j + 3][49] = data[6][j]
-      
   for j in range(3):
     dataHist[j + 7][49] = data[7][j]
-
   dataHist[6][49] = pow(pow(data[6][0], 2) + pow(data[6][1], 2) + pow(data[6][2], 2), 1/2)
   dataHist[10][49] = pow(pow(data[7][0], 2) + pow(data[7][1], 2) + pow(data[7][2], 2), 1/2)
 
@@ -486,7 +512,10 @@ def animate(i):
 
   #scale ax4 plot
   ax4.set_ylim(ymin, ymax + (ymax - ymin) / 5)
-  ax4.set_yticks(np.linspace(ymin, ymax + (ymax - ymin) / 5, 7))
+
+  if(ymin != ymax):
+    movementTicks = np.linspace(ymin, ymax + (ymax - ymin) / 5, 7)
+    ax4.set_yticks(movementTicks)
 
   #update legend with latest data values
   ax4.legend(['px:{}'.format(dataHist[0][49]),
@@ -504,64 +533,7 @@ def animate(i):
 
   '''[Multiple Axes]--------------------------------------------------------'''
   
-  '''
-  if data[8][0] & MOTOR_KILL_A_BIT == MOTOR_KILL_A_BIT:
-    statusStrings[0] = 'Up  '
-  else:
-    statusStrings[0] = 'Down'
-
-  if data[8][0] & MOTOR_HEALTH_A_BIT == MOTOR_HEALTH_A_BIT:
-    statusStrings[1] = 'Up  '
-  else:
-    statusStrings[1] = 'Down'
-
-  if data[8][0] & SENSOR_LIN_A_BIT == SENSOR_LIN_A_BIT:
-    statusStrings[2] = 'Up  '
-  else:
-    statusStrings[2] = 'Down'
-
-  if data[8][0] & SENSOR_ANG_A_BIT == SENSOR_ANG_A_BIT:
-    statusStrings[3] = 'Up  '
-  else:
-    statusStrings[3] = 'Down'
-
-  if data[8][0] & SENSOR_DATA_A_BIT == SENSOR_DATA_A_BIT:
-    statusStrings[4] = 'Up  '
-  else:
-    statusStrings[4] = 'Down'
-
-  if data[8][0] & MASTER_CON_A_BIT == MASTER_CON_A_BIT:
-    statusStrings[5] = 'Up  '
-  else:
-    statusStrings[5] = 'Down'
-
-  if data[8][0] & MASTER_GOALS_A_BIT == MASTER_GOALS_A_BIT:
-    statusStrings[6] = 'Up  '
-  else:
-    statusStrings[6] = 'Down'
-
-  if data[8][0] & MASTER_SENSRES_A_BIT == MASTER_SENSRES_A_BIT:
-    statusStrings[7] = 'Up  '
-  else:
-    statusStrings[7] = 'Down'
-
-  if data[8][0] & VIS_FORW_A_BIT == VIS_FORW_A_BIT:
-    statusStrings[8] = 'Up  '
-  else:
-    statusStrings[8] = 'Down'
-
-  if data[8][0] & VIS_DOWN_A_BIT == VIS_DOWN_A_BIT:
-    statusStrings[9] = 'Up  '
-  else:
-    statusStrings[9] = 'Down'
-
-  if data[8][0] & SON_TARG_A_BIT == SON_TARG_A_BIT:
-    statusStrings[10] = 'Up  '
-  else:
-    statusStrings[10] = 'Down'
-  '''
-  
-  status.set_text('Status Motor  Kill  :{}\nStatus Motor  Health:{}\nStatus Sensor Linear:{}\nStatus Sensor Ang   :{}\nStatus Sensor Data  :{}\nStatus Master Cont  :{}\nStatus Master Goals :{}\nStatus Master SenRes:{}\nStatus CVDown Target:{}\nStatus CVForw Target:{}\nStatus Sonar  Target:{}'.format(
+  status.set_text('Buffer Status:\nMotor Kill:{}\nMotor Health:{}\nMotor Outputs:{}\nSensor Lin:{}\nSensor Ang:{}\nSensor Data:{}\nMaster Control:{}\nMaster Goals:{}\nMaster Sensor Reset:{}\nCVDown Target:{}\nCVForw Target:{}\nSonar Target:{}'.format(
                    statusStrings[0], 
                    statusStrings[1], 
                    statusStrings[2], 
@@ -573,6 +545,7 @@ def animate(i):
                    statusStrings[8], 
                    statusStrings[9],
                    statusStrings[10], 
+                   statusStrings[11]
                    ))
   
 #set up animation
