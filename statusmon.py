@@ -31,20 +31,27 @@ from numpy import sin, cos
 #DSM Constants
 CLIENT_SERV  = SONAR_SERVER_ID #Server id to connect to
 CLIENT_ID    = 60              #Client id to register to server
-NUM_BUFFERS  = 12              #Number of buffers to read from
+NUM_BUFFERS  = 14              #Number of buffers to read from
 NUM_DEBUG    = 1               #Number of buffers to read debug from
+
 #DSM Buffer Values
 bufNames = [MOTOR_KILL,         MOTOR_HEALTH,       MOTOR_OUTPUTS,
+            SENSORS_LINEAR,     SENSORS_ANGULAR,
             SENSORS_LINEAR,     SENSORS_ANGULAR,    SENSORS_DATA, 
             MASTER_CONTROL,     MASTER_GOALS,       MASTER_SENSOR_RESET,
             TARGET_LOCATION,    TARGET_LOCATION,    TARGET_LOCATION]
 bufIps = [MOTOR_SERVER_IP,          MOTOR_SERVER_IP,           MOTOR_SERVER_IP,
+          #'10.0.1.8',               '10.0.1.8',
+          MOTOR_SERVER_IP,          MOTOR_SERVER_IP,
+          #'10.0.1.8',               '10.0.1.8',                '10.0.1.8', 
           SENSOR_SERVER_IP,         SENSOR_SERVER_IP,          SENSOR_SERVER_IP, 
-          '10.0.1.8',         MASTER_SERVER_IP,          MASTER_SERVER_IP, 
+          #'10.0.1.8',               MASTER_SERVER_IP,          MASTER_SERVER_IP, 
+          MASTER_SERVER_IP,         MASTER_SERVER_IP,          MASTER_SERVER_IP,           
           FORWARD_VISION_SERVER_IP, DOWNWARD_VISION_SERVER_IP, SONAR_SERVER_IP]
 bufIds = [MOTOR_SERVER_ID,          MOTOR_SERVER_ID,           MOTOR_SERVER_ID,
-          SENSOR_SERVER_ID,         SENSOR_SERVER_ID,          SENSOR_SERVER_ID, 
-          MASTER_SERVER_ID,         MASTER_SERVER_ID,          MASTER_SERVER_ID, 
+          MOTOR_SERVER_ID,          MOTOR_SERVER_ID,
+          SENSOR_SERVER_ID,         SENSOR_SERVER_ID,          SENSOR_SERVER_ID,
+          MASTER_SERVER_ID,         MASTER_SERVER_ID,          MASTER_SERVER_ID,
           FORWARD_VISION_SERVER_ID, DOWNWARD_VISION_SERVER_ID, SONAR_SERVER_ID]
 
 #Arg parse constants
@@ -62,14 +69,14 @@ CUBE_POINTS  = 16   #Number of points in cube orientation plot
 ARROW_POINTS = 8    #Number of points in cube arrow plot
 NUM_MV_LINES = 11   #Number o movement lines to plot
 HIST_LENGTH  = 50   #Number of past data points to store for movement viewer
-DELAY        = 1000 #Millisecond delay between drawings
+DELAY        = 100  #Millisecond delay between drawings
 
 #Display Constants
 FIG_WIDTH    = 16                             #Aspect width
 FIG_HEIGHT   = 8                              #Aspect height
 FIG_NAME     = 'Cubeception 3 Status Monitor' #Name displayed in window
 PLOT_STYLE   = 'dark_background'              #Background style
-LIGHT_GREEN  = (0, 1, 0, 1)                   #RGBA color
+LIGHT_GREEN  = (0, 1, 0, 1)                   #RGBA color, used for most things
 DARK_GREEN   = (0, 0.5, 0, 1)                 #RGBA color
 LIGHT_RED    = (1, 0.75, 0.75, 1)             #RGBA color
 DARK_RED     = (1, 0, 0, 1)                   #RGBA color
@@ -81,38 +88,42 @@ TITLE_SIZE   = 10                             #Default title font size
 '''Parse Args------------------------------------------------------------------
 Parse command line args
 ----------------------------------------------------------------------------'''
-mode = MODE_LIVE     #Default mode is ReadBufferMode
-randInit = INIT_ZERO  #Default init is 0 init
+mode     = MODE_LIVE #Default mode is ReadBufferMode
+randInit = INIT_ZERO #Default init is 0 init
 
-modeStr = ['Live ', 'Debug', 'Demo ']
-initStr = ['Zero', 'Rand']
+modeStr  = ['Live ', 'Debug', 'Demo '] #Modes in string form
+initStr  = ['Zero', 'Rand']            #Init states in string form
 
+#Args to parse
 if len(sys.argv) > 1:
   try:
     opts, args = getopt.getopt(sys.argv[1:], 'hm:r')
   except getopt.GetoptError as err:
     #Print error message, then print short usage, then exit
     print(err)
-    print('statusmon.py [-m] (Set mode) [-r] (Rand init) | [-h] (Show Help)')
+    print('Usage: statusmon.py [-m] <mode> [-r] | [-h]\n'\
+            '  -m   Set Mode         (\'debug\', \'demo\')\n'\
+            '  -r   Random Data Init\n'\
+            '  -h   Show help')
     sys.exit(2)
 
   for opt, arg in opts:
-    if opt == '-h':    #Print help and exit
-      print('statusmon.py [-m] | [-h]\n'\
-            '-m   Set Mode (debug, demo)\n'\
-            '-r   Random Data Init\n'\
-            '-h   Show help')
+    if opt == '-h':        #Print help and exit
+      print('Usage: statusmon.py [-m] <mode> [-r] | [-h]\n'\
+            '  -m   Set Mode         (\'debug\', \'demo\')\n'\
+            '  -r   Random Data Init\n'\
+            '  -h   Show help')
       sys.exit()
-    elif opt == '-m':  #Set mode to demo
+    elif opt == '-m':      #Set mode to demo
       if arg == 'debug':
         mode = MODE_DEBUG
       elif arg == 'demo':
         mode = MODE_DEMO
-    elif opt == '-r':  #Set init mode to random
+    elif opt == '-r':      #Set init mode to random
       randInit = INIT_RAND
 
-print('[Mode: {}  ]'.format(modeStr[mode]))
-print('[Init: {}   ]'.format(initStr[randInit]))
+print('[Info   ] Mode: {}'.format(modeStr[mode]))
+print('[Info   ] Init: {}'.format(initStr[randInit]))
 
 
 '''Init------------------------------------------------------------------------
@@ -122,6 +133,15 @@ Generates figure and subplots, sets base layout and initializes data
 '''[Connect to DSM Server]--------------------------------------------------'''
 #Initialize client
 client = pydsm.Client(CLIENT_SERV, CLIENT_ID, True)
+
+for i in range(NUM_BUFFERS):
+  if(bufIps[i] != MASTER_SERVER_IP and 
+     bufIps[i] != SENSOR_SERVER_IP and
+     bufIps[i] != MOTOR_SERVER_IP and
+     bufIps[i] != FORWARD_VISION_SERVER_IP and
+     bufIps[i] != DOWNWARD_VISION_SERVER_IP and
+     bufIps[i] != SONAR_SERVER_IP):
+    print('[Warning] Connecting to non-rasp pi IP')
 
 #Initialize remote buffers
 for i in range(NUM_BUFFERS):
@@ -161,13 +181,14 @@ cvdownData       = np.zeros((5))
 orientationData  = np.zeros((4))
 thrusterData     = np.zeros((2, 4))
 movementData     = np.zeros((3, 4))
-statusData       = np.zeros((3))
+statusData       = np.empty(3, dtype = object)
 
 #Debug data
 masterControlData = np.zeros((3, 3, 3))
+navData           = np.zeros((2, 6))
 
 '''[Init Polar Targets]-----------------------------------------------------'''
-
+#Init CV target data
 if randInit == INIT_RAND:
   for i in range(3):
     cvforwardData[i][0] = np.random.randint(0, 4)
@@ -211,6 +232,7 @@ ca[2] = [0, 0,    0,     0, 0, 0.25, -0.25, 0]
 cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
 
 '''[Init Heatmap]-----------------------------------------------------------'''
+#Init thruster heatmap
 heatmap = ax3.imshow(np.random.uniform(size = (3, 4)), 
                      cmap = 'RdBu', interpolation = 'nearest')
 
@@ -220,11 +242,13 @@ if randInit == INIT_ZERO:
 '''[Init Movement]----------------------------------------------------------'''
 #Past ax4 data to plot
 dataHist = np.zeros((NUM_MV_LINES, HIST_LENGTH))
+
+#Init movement data
 if randInit == INIT_ZERO:
   ax4.set_xticks(np.linspace(0, HIST_LENGTH - 1, HIST_LENGTH))
   ax4.set_yticks(np.linspace(-1, 1, 5))
   ax4.set_ylim(-1, 1)  
-if randInit == INIT_RAND:
+elif randInit == INIT_RAND:
   dataHist[0][49] = 1
   dataHist[1][44] = 2
   dataHist[2][39] = 4
@@ -244,13 +268,17 @@ colors = ['#ff0000', '#cf0000', '#8f0000', '#00ff00', '#00cf00', '#008f00',
 #Initialize position graph plots
 mLines = [ax4.plot([], '-', color = colors[j])[0] for j in range(NUM_MV_LINES)]
 
-
 '''[Init Status]------------------------------------------------------------'''
+#Init strings to display over plot
 statusStrings = np.empty(NUM_BUFFERS, dtype = 'object')
-status = ax5.text(0.05, .55, 'Loading')
-debugStatus = ax5.text(0.05, .3, '')
+status            = ax5.text(0.05, 0.55, 'Loading')
+debugStatusMaster = ax5.text(0.05, 0.3 , '')
+debugStatusNav    = ax5.text(0.05, 0.05, '')
+
 status.set_family('monospace')
-debugStatus.set_family('monospace')
+debugStatusMaster.set_family('monospace')
+debugStatusNav.set_family('monospace')
+
 '''initPlot--------------------------------------------------------------------
 Sets up subplots and starting image of figure to display
 ----------------------------------------------------------------------------'''
@@ -334,7 +362,7 @@ def initFigure():
   for ax in ax2, ax5:
     ax.tick_params(labelbottom = 'off', labelleft = 'off')
 
-  print('[Init Complete]')
+  print('[Info   ] Figure init successful')
 
 '''quaternionFuncs-------------------------------------------------------------
 Functions to create and use quaternions for robot orientation viewer
@@ -421,11 +449,12 @@ def genData():
     for j in range(3):
       movementData[i][j] += np.random.randint(-2, 2)
 
+  statusData[0] = 'Killed'
+
 '''getBufferData---------------------------------------------------------------
 Obtains most recent buffer data
 ----------------------------------------------------------------------------'''
 def getBufferData(debug):
-  
   #Check each buffer's status and update data array if active
   for i in range(NUM_BUFFERS):
     temp, active = client.getRemoteBufferContents(bufNames[i], bufIps[i], 
@@ -444,22 +473,31 @@ def getBufferData(debug):
           thrusterData[0][j] = temp.motors[j]
         for j in range(4):
           thrusterData[1][j] = temp.motors[j + 4]
-      elif i == 3:                        #Sensors Linear
+      elif i == 3:                        #Motor Linear
+        temp = Unpack(PhysicalOutput, temp)
+        for j in range(3):
+          navData[0][j] = temp.force[j]
+          navData[0][j + 3] = temp.torque[j]
+      elif i == 4:                        #Motor Angular
+        temp = Unpack(PhysicalOutput, temp)
+        for j in range(3):
+          navData[1][j] = temp.force[j]
+          navData[1][j + 3] = temp.torque[j]
+      elif i == 5:                        #Sensors Linear
         temp = Unpack(Linear, temp)
         for j in range(3):
           movementData[0][j] = temp.pos[j]
           movementData[1][j] = temp.vel[j]
           movementData[2][j] = temp.acc[j]
-      elif i == 4:                        #Sensors Angular
+      elif i == 6:                        #Sensors Angular
         temp = Unpack(Angular, temp)
         for j in range(4):
           orientationData[j] = temp.pos[j]
-      #elif i == 5:                       #Sensors Data
-      elif i == 6:                       #Master Control
+      #elif i == 7:                       #Sensors Data
+      elif i == 8:                       #Master Control
         if debug:
           temp = Unpack(ControlInput, temp)
           masterControlData[2][0][0] = int(temp.mode)
-          
           #Unpack angular data
           for j in range(3):
             if ((1 << j) & int(temp.mode)):
@@ -470,7 +508,6 @@ def getBufferData(debug):
               masterControlData[0][j][0] = temp.angular[j].vel
               for k in range(2):
                 masterControlData[0][j][k + 1] = 0
-
           #Unpack linear data
           for j in range(3):
             if ((1 << (j + 3)) & int(temp.mode)):
@@ -481,10 +518,9 @@ def getBufferData(debug):
               masterControlData[1][j][0] = temp.linear[j].vel
               for k in range(2):            
                 masterControlData[1][j][k + 1] = 0
-
-      #elif i == 7:                       #Master Goals
-      #elif i == 8:                       #Master Sensor Reset
-      elif i == 9:                        #CV Forw Target Location
+      #elif i == 9:                       #Master Goals
+      #elif i == 10:                       #Master Sensor Reset
+      elif i == 11:                        #CV Forw Target Location
         temp = Unpack(LocationArray, temp)
         for j in range(3):
           cvforwardData[j][0] = temp.locations[j].x
@@ -492,15 +528,14 @@ def getBufferData(debug):
           cvforwardData[j][2] = temp.locations[j].z
           cvforwardData[j][3] = temp.locations[j].confidence
           cvforwardData[j][4] = temp.locations[j].loctype
-      elif i == 10:                       #CV Down Target Location
+      elif i == 12:                       #CV Down Target Location
         temp = Unpack(Location, temp)
         cvdownData[0][0] = temp.x
         cvdownData[0][1] = temp.y
         cvdownData[0][2] = temp.z
         cvdownData[0][3] = temp.confidence
         cvdownData[0][4] = temp.loctype
-      #elif i == 11:                      #Sonar Target Location
-
+      #elif i == 13:                      #Sonar Target Location
       #Set status string to indicate whether buffer is up or down
       statusStrings[i] = 'Up  '
     else:
@@ -510,7 +545,6 @@ def getBufferData(debug):
 Updates subplots of figure
 ----------------------------------------------------------------------------'''
 def animate(i):
-  
   global mode, ax1, ax2, ax3, ax4, ax5, data, dataHist, cubeLines, cubeArrow
 
   #Grab latest data to plot as well as info on whether buffers are online
@@ -543,6 +577,7 @@ def animate(i):
   elif cvdownData[3] > 255:
     cvdownData[3] = 255
 
+  #Find max radius to adjust scale/ticks
   maxR = 0
   for j in range(3):
     polarR = pow(pow(cvforwardData[j][0], 2) + 
@@ -550,7 +585,8 @@ def animate(i):
 
     if polarR > maxR:
       maxR = polarR
-
+    
+    #Prevent crashes
     if cvforwardData[j][0] != 0:
       polarT = np.arctan(cvforwardData[j][1] / cvforwardData[j][0])
     else:
@@ -574,6 +610,7 @@ def animate(i):
   if polarR > maxR:
     maxR = polarR
 
+  #Prevent crashes
   if cvdownData[0] != 0:
     polarT = np.arctan(cvdownData[1] / cvdownData[0])
   else:
@@ -683,6 +720,7 @@ def animate(i):
       elif dataHist[j][k] < ymin:
         ymin = dataHist[j][k]
 
+  #Only if data results in a different max/min, adjust scale
   if ymin != ymax:
     ax4.set_ylim(ymin, ymax + (ymax - ymin) / 5)
     movementTicks = np.linspace(ymin, ymax + (ymax - ymin) / 5, 7)    
@@ -706,6 +744,7 @@ def animate(i):
   #Update status text
   status.set_text('BUFFER STATUS---------------------------\n' \
          'Motor  Kill   : {}\nMotor  Health : {}\nMotor  Outputs: {}\n' \
+         'Motor  Lin    : {}\nMotor  Ang    : {}\n' \
          'Sensor Lin    : {}\nSensor Ang    : {}\nSensor Data   : {}\n' \
          'Master Control: {}\nMaster Goals  : {}\nMaster SensRes: {}\n' \
          'CVDown Target : {}\nCVForw Target : {}\nSonar  Target : {}\n\n' \
@@ -714,18 +753,20 @@ def animate(i):
             statusStrings[3], statusStrings[4], statusStrings[5],
             statusStrings[6], statusStrings[7], statusStrings[8], 
             statusStrings[9], statusStrings[10], statusStrings[11],
-            
+            statusStrings[12], statusStrings[13], 
             statusData[0]))
+
+  #Only show debug text if in debug mode
   if mode == MODE_DEBUG:
-    debugStatus.set_text('BUFFER DEBUG----------------------------\n' \
+    debugStatusMaster.set_text('BUFFER DEBUG----------------------------\n' \
          '[Master Control]\n' \
          'Ang X: vel: {} pos1: {} pos2: {}\n' \
          'Ang Y: vel: {} pos1: {} pos2: {}\n' \
          'Ang Z: vel: {} pos1: {} pos2: {}\n' \
-         'Lin X : vel: {} pos1: {} pos2: {}\n' \
-         'Lin Y : vel: {} pos1: {} pos2: {}\n' \
-         'Lin Z : vel: {} pos1: {} pos2: {}\n' \
-         'Mode  : {}'.format(
+         'Lin X: vel: {} pos1: {} pos2: {}\n' \
+         'Lin Y: vel: {} pos1: {} pos2: {}\n' \
+         'Lin Z: vel: {} pos1: {} pos2: {}\n' \
+         'Mode : {}'.format(
          round(masterControlData[0][0][0], 3),
          round(masterControlData[0][0][1], 3),
          round(masterControlData[0][0][2], 3),
@@ -744,11 +785,29 @@ def animate(i):
          round(masterControlData[1][2][0], 3),
          round(masterControlData[1][2][1], 3),
          round(masterControlData[1][2][2], 3),
-         round(masterControlData[2][0][0], 3),))
+         round(masterControlData[2][0][0], 3)))
+
+    debugStatusNav.set_text('[Nav Buffers]\n' \
+         'Lin ForcX: {} ForeY: {} ForcZ: {}\n' \
+         'Lin TorqX: {} TorqY: {} TorqZ: {}\n' \
+         'Ang ForcX: {} ForeY: {} ForcZ: {}\n' \
+         'Ang TorqX: {} TorqY: {} TorqZ: {}\n'.format(
+         round(navData[0][0], 3),
+         round(navData[0][1], 3),
+         round(navData[0][2], 3),
+         round(navData[0][3], 3),
+         round(navData[0][4], 3),
+         round(navData[0][5], 3),
+         round(navData[1][0], 3),
+         round(navData[1][1], 3),
+         round(navData[1][2], 3),
+         round(navData[1][3], 3),
+         round(navData[1][4], 3),
+         round(navData[1][5], 3)))
 
 #Set up animation
 ani = animation.FuncAnimation(fig, animate, init_func = initFigure, 
-                              interval = DELAY)
+                              interval = DELAY, blit = True)
 
 #Show the figure
 plt.show()
