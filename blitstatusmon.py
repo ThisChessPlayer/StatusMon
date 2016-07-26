@@ -8,7 +8,7 @@
                 viewer, thruster heatmap, location/velocity/acceleration plots,
                 and buffer status messages. 
 ---*-----------------------------------------------------------------------*'''
-import sys, getopt
+import sys, getopt, time
 sys.path.insert(0, '../DistributedSharedMemory/build')
 sys.path.insert(0, '../PythonSharedBuffers/src')
 import pydsm
@@ -23,7 +23,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from mpl_toolkits.mplot3d import Axes3D
-from itertools import product, combinations
 import numpy as np
 from numpy import sin, cos
 
@@ -31,6 +30,7 @@ from numpy import sin, cos
 #DSM Constants
 CLIENT_SERV  = SONAR_SERVER_ID #Server id to connect to
 CLIENT_ID    = 60              #Client id to register to server
+NUM_BUFFERS  = 14              #Number of buffers to read from
 NUM_DEBUG    = 1               #Number of buffers to read debug from
 
 #DSM Buffer Values
@@ -66,9 +66,9 @@ NUM_PL_LINES = 36   #Number of polar theta lines to plot
 NUM_TARGETS  = 2    #Number of targets to plot on polar targets viewer
 CUBE_POINTS  = 16   #Number of points in cube orientation plot
 ARROW_POINTS = 8    #Number of points in cube arrow plot
-NUM_MV_LINES = 11   #Number of movement lines to plot
+NUM_MV_LINES = 11   #Number o movement lines to plot
 HIST_LENGTH  = 50   #Number of past data points to store for movement viewer
-DELAY        = 1000 #Millisecond delay between drawings
+DELAY        = 500 #Millisecond delay between drawings
 
 #Display Constants
 FIG_WIDTH    = 16                             #Aspect width
@@ -131,11 +131,10 @@ Generates figure and subplots, sets base layout and initializes data
 
 '''[Connect to DSM Server]--------------------------------------------------'''
 print('[Info   ] Initializing DSM client/buffers')
-
 #Initialize client
 client = pydsm.Client(CLIENT_SERV, CLIENT_ID, True)
 
-for i in range(len(bufIps)):
+for i in range(NUM_BUFFERS):
   if(bufIps[i] != MASTER_SERVER_IP and 
      bufIps[i] != SENSOR_SERVER_IP and
      bufIps[i] != MOTOR_SERVER_IP and
@@ -145,7 +144,7 @@ for i in range(len(bufIps)):
     print('[Warning] Connecting to non-rasp pi IP')
 
 #Initialize remote buffers
-for i in range(len(bufNames)):
+for i in range(NUM_BUFFERS):
   client.registerRemoteBuffer(bufNames[i], bufIps[i], int(bufIds[i]))
 
 '''[Initialize Figure/Subplots]---------------------------------------------'''
@@ -212,15 +211,18 @@ if randInit == INIT_RAND:
 
 cvfMark = np.empty(3, dtype = object)
 cvfText = np.empty(3, dtype = object)
+cvdMark = None
 
 #Polar target marks and text
 for i in range(3):
-  cvfMark[i], = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
-  cvfText[i] = ax1.text(0, 0, '', 
+  if cvfMark[i] == None:
+    cvfMark[i], = ax1.plot([], [], marker = 'o', c = DARK_RED, markersize = 10)
+    cvfText[i]  = ax1.text([], [], '', 
                 bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
 
-cvdMark, = ax1.plot(0, 0, marker = 'o', c = DARK_RED, markersize = 10)
-cvdText = ax1.text(0, 0, '', 
+if cvdMark == None:
+  cvdMark, = ax1.plot([], [], marker = 'o', c = DARK_RED, markersize = 10)
+  cvdText = ax1.text([], [], '', 
                 bbox = dict(facecolor = DARK_GREEN, alpha = 0.3), color = 'w')
 
 '''[Init Orientation]-------------------------------------------------------'''
@@ -231,14 +233,14 @@ cube = np.zeros((3, CUBE_POINTS))
 cube[0] = [-1, -1, -1, 1,  1, -1, -1,  1,  1, -1, -1, -1,  1,  1,  1,  1]
 cube[1] = [-1, -1,  1, 1,  1,  1, -1, -1, -1, -1,  1,  1,  1, -1, -1,  1]
 cube[2] = [-1,  1,  1, 1, -1, -1, -1, -1,  1,  1,  1, -1, -1, -1,  1,  1]
-cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], colors = LIGHT_GREEN)
+cubeLines = ax2.plot_wireframe([], [], [], colors = LIGHT_GREEN)
 
 #Arrow for locating front face of cube
 ca = np.zeros((3, ARROW_POINTS))
 ca[0] = [0, 2, 1.75,  1.75, 2, 1.75,  1.75, 2]
 ca[1] = [0, 0, 0.25, -0.25, 0,    0,     0, 0]
 ca[2] = [0, 0,    0,     0, 0, 0.25, -0.25, 0]
-cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], colors = LIGHT_YELLOW)
+cubeArrow = ax2.plot_wireframe([], [], [], colors = LIGHT_YELLOW)
 
 '''[Init Heatmap]-----------------------------------------------------------'''
 print('[Info   ] Initializing heatmap')
@@ -281,7 +283,7 @@ mLines = [ax4.plot([], '-', color = colors[j])[0] for j in range(NUM_MV_LINES)]
 print('[Info   ] Initializing status data')
 
 #Init strings to display over plot
-statusStrings = np.empty(len(bufNames), dtype = 'object')
+statusStrings = np.empty(NUM_BUFFERS, dtype = 'object')
 status            = ax5.text(0.05, 0.55, 'Loading')
 debugStatusMaster = ax5.text(0.05, 0.3 , '')
 debugStatusNav    = ax5.text(0.05, 0.05, '')
@@ -295,15 +297,15 @@ Sets up subplots and starting image of figure to display
 ----------------------------------------------------------------------------'''
 def initFigure():
   print('[Info   ] Initializing figure')
-
+  
   '''[Polar Targets]--------------------------------------------------------'''
   #Set subplot title
   ax1.set_title('Targets')
-  
+
   #Set label locations appropriately
   ax1.set_theta_zero_location("N")
   ax1.set_theta_direction(-1)
-  
+
   #Format ticks and labels
   ax1.set_thetagrids(np.linspace(0, 360, NUM_PL_LINES, endpoint = False), 
                      frac = 1.05)
@@ -312,14 +314,14 @@ def initFigure():
   #Make ygridlines more visible (circular lines)
   for line in ax1.get_ygridlines():
     line.set_color(LIGHT_GREEN)
-  
+
   '''[Orientation]----------------------------------------------------------'''
   #Set subplot title
   ax2.set_title('Orientation')
 
   #Enable grid
   ax2.grid(b = False)
-  
+
   #Set color of backgrounds
   ax2.w_xaxis.set_pane_color((0, 0.075, 0, 1))
   ax2.w_yaxis.set_pane_color((0, 0.075, 0, 1))
@@ -351,16 +353,15 @@ def initFigure():
   #Label ticks so they correspond to motors
   ax3.set_xticklabels(['1', '2', '3', '4'])
   ax3.set_yticklabels(['X', 'Y', 'Z'])
-  
+
   '''[Position/Velocity/Acceleration]---------------------------------------'''
   #Set subplot title
   ax4.set_title('Movement')
-  
-  #Set x scale
-  ax4.set_xticks(np.linspace(0, HIST_LENGTH, 11))
-  
+
   #Enable grid
   ax4.grid(True)
+
+  ax4.set_xticks(np.linspace(0, HIST_LENGTH, 11))
 
   if randInit == INIT_ZERO:
     ax4.set_yticks(np.linspace(-1, 1, 5))
@@ -372,13 +373,14 @@ def initFigure():
 
   '''[Multiple Axes]--------------------------------------------------------'''
   for ax in ax2, ax3, ax5:
-    ax.tick_params(axis = 'both', which = 'both', bottom = 'off', top = 'off',
-           left = 'off', right = 'off')
-           
+    ax.tick_params(axis = 'both', which = 'both', bottom = 'off', 
+                   top = 'off',  left = 'off', right = 'off')
+
   for ax in ax2, ax5:
     ax.tick_params(labelbottom = 'off', labelleft = 'off')
 
   print('[Info   ] Figure init successful')
+  return ax1, ax2, ax3, ax4, ax5
 
 '''quaternionFuncs-------------------------------------------------------------
 Functions to create and use quaternions for robot orientation viewer
@@ -427,19 +429,19 @@ Generates fake data to display
 ----------------------------------------------------------------------------'''
 def genData():
   #Set all buffer strings to active
-  for i in range(len(bufNames)):
+  for i in range(NUM_BUFFERS):
     statusStrings[i] = 'Up  '
 
   #Generate forward and downward computer vision data
   for i in range(3):
-    cvforwardData[i][0] = np.random.randint(0, 3)
-    cvforwardData[i][1] = np.random.randint(0, 5)
+    cvforwardData[i][0] = np.random.randint(0, 5)
+    cvforwardData[i][1] = np.random.randint(-5, 5)
     cvforwardData[i][2] = np.random.randint(-10, 10)
     cvforwardData[i][3] = np.random.randint(0, 255)
     cvforwardData[i][4] = np.random.randint(0, 5)
 
-  cvdownData[0] = np.random.randint(0, 3)
-  cvdownData[1] = np.random.randint(0, 5)
+  cvdownData[0] = np.random.randint(0, 5)
+  cvdownData[1] = np.random.randint(-5, 5)
   cvdownData[2] = np.random.randint(-10, 10)
   cvdownData[3] = np.random.randint(0, 255)
   cvdownData[4] = np.random.randint(0, 5)
@@ -682,8 +684,10 @@ def animate(i):
     ca[2][j] = v[2]
   
   #Remove old wireframes and plot new ones
-  cubeLines.remove()
-  cubeArrow.remove()  
+  ax2.collections.remove(cubeLines)
+  ax2.collections.remove(cubeArrow)
+  #cubeLines.remove()
+  #cubeArrow.remove()  
   cubeLines = ax2.plot_wireframe(cube[0], cube[1], cube[2], 
                                  colors = LIGHT_GREEN)
   cubeArrow = ax2.plot_wireframe(ca[0], ca[1], ca[2], 
@@ -821,10 +825,18 @@ def animate(i):
          round(navData[1][4], 3),
          round(navData[1][5], 3)))
 
+  #drawables = [cvfMark[0], cvfMark[1], cvfMark[2], cvfText[0], cvfText[1], 
+  #             cvfText[2], cvdMark, cvdText
+  drawables = [ax1, ax2, heatmap, 
+               ax4.get_legend(), status, debugStatusMaster, debugStatusNav]
+  for j in range(len(mLines)):
+    drawables.append(mLines[j])
+  return [drawables[j] for j in range(len(drawables))]
+
+#initFigure()
 #Set up animation
 ani = animation.FuncAnimation(fig, animate, init_func = initFigure, 
-                              interval = DELAY)
+                              interval = DELAY, blit = True)
 
 #Show the figure
 plt.show()
-
