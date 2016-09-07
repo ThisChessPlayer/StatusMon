@@ -1,24 +1,14 @@
 #!/usr/bin/python3
 '''*-----------------------------------------------------------------------*---
                                                          Author: Jason Ma
-                                                         Date  : Jul 17 2016
-   File Name  : statusmon.py
+                                                         Date  : Sep 06 2016
+   File Name  : demoStatusmon.py
    Description: Displays data from buffers that Cubeception 3 writes to.
                 The monitor includes a polar graph for targets, orientation 
                 viewer, thruster heatmap, location/velocity/acceleration plots,
                 and buffer status messages. 
 ---*-----------------------------------------------------------------------*'''
 import sys, getopt
-sys.path.insert(0, './DistributedSharedMemory/build')
-sys.path.insert(0, './PythonSharedBuffers/src')
-import pydsm
-from ctypes import *
-from Sensor import *
-from Master import *
-from Navigation import *
-from Vision import *
-from Serialization import *
-from Constants import *
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -28,30 +18,14 @@ import numpy as np
 from numpy import sin, cos
 
 '''[RUN VARS]---------------------------------------------------------------'''
+
 #DSM Constants
-CLIENT_SERV  = SONAR_SERVER_ID #Server id to connect to
-CLIENT_ID    = 60              #Client id to register to server
-NUM_DEBUG    = 1               #Number of buffers to read debug from
+NUM_DEBUG = 1      #Number of buffers to read debug from
 
 #DSM Buffer Values
-bufNames = [MOTOR_KILL,         MOTOR_HEALTH,       MOTOR_OUTPUTS,
-            SENSORS_LINEAR,     SENSORS_ANGULAR,
-            SENSORS_LINEAR,     SENSORS_ANGULAR,    SENSORS_DATA, 
-            MASTER_CONTROL,     MASTER_GOALS,       MASTER_SENSOR_RESET,
-            TARGET_LOCATION,    TARGET_LOCATION,    TARGET_LOCATION]
-bufIps = [MOTOR_SERVER_IP,          MOTOR_SERVER_IP,           MOTOR_SERVER_IP,
-          #'10.0.1.8',               '10.0.1.8',
-          MOTOR_SERVER_IP,          MOTOR_SERVER_IP,
-          #'10.0.1.8',               '10.0.1.8',                '10.0.1.8', 
-          SENSOR_SERVER_IP,         SENSOR_SERVER_IP,          SENSOR_SERVER_IP, 
-          #'10.0.1.8',               MASTER_SERVER_IP,          MASTER_SERVER_IP, 
-          MASTER_SERVER_IP,         MASTER_SERVER_IP,          MASTER_SERVER_IP,           
-          FORWARD_VISION_SERVER_IP, DOWNWARD_VISION_SERVER_IP, SONAR_SERVER_IP]
-bufIds = [MOTOR_SERVER_ID,          MOTOR_SERVER_ID,           MOTOR_SERVER_ID,
-          MOTOR_SERVER_ID,          MOTOR_SERVER_ID,
-          SENSOR_SERVER_ID,         SENSOR_SERVER_ID,          SENSOR_SERVER_ID,
-          MASTER_SERVER_ID,         MASTER_SERVER_ID,          MASTER_SERVER_ID,
-          FORWARD_VISION_SERVER_ID, DOWNWARD_VISION_SERVER_ID, SONAR_SERVER_ID]
+bufNames = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+bufIps = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+bufIds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
 #Arg parse constants
 MODE_LIVE  = 0
@@ -87,7 +61,7 @@ TITLE_SIZE   = 10                             #Default title font size
 '''Parse Args------------------------------------------------------------------
 Parse command line args
 ----------------------------------------------------------------------------'''
-mode     = MODE_LIVE #Default mode is ReadBufferMode
+mode     = MODE_DEMO #Forced mode is DemoMode
 randInit = INIT_ZERO #Default init is 0 init
 
 modeStr  = ['Live ', 'Debug', 'Demo '] #Modes in string form
@@ -100,7 +74,7 @@ if len(sys.argv) > 1:
   except getopt.GetoptError as err:
     #Print error message, then print short usage, then exit
     print(err)
-    print('Usage: python3 statusmon.py [-m] <mode> [-r] | [-h]\n'\
+    print('Usage: python3 demoStatusmon.py [-m] <mode> [-r] | [-h]\n'\
             '  -m   Set Mode         (\'debug\', \'demo\')\n'\
             '  -r   Random Data Init\n'\
             '  -h   Show help')
@@ -108,7 +82,7 @@ if len(sys.argv) > 1:
 
   for opt, arg in opts:
     if opt == '-h':        #Print help and exit
-      print('Usage: python3 statusmon.py [-m] <mode> [-r] | [-h]\n'\
+      print('Usage: python3 demoStatusmon.py [-m] <mode> [-r] | [-h]\n'\
             '  -m   Set Mode         (\'debug\', \'demo\')\n'\
             '  -r   Random Data Init\n'\
             '  -h   Show help')
@@ -128,26 +102,6 @@ print('[Info   ] Init: {}'.format(initStr[randInit]))
 '''Init------------------------------------------------------------------------
 Generates figure and subplots, sets base layout and initializes data
 ----------------------------------------------------------------------------'''
-
-'''[Connect to DSM Server]--------------------------------------------------'''
-if mode != MODE_DEMO:
-  print('[Info   ] Initializing DSM client/buffers')
-
-  #Initialize client
-  client = pydsm.Client(CLIENT_SERV, CLIENT_ID, True)
-
-  for i in range(len(bufIps)):
-    if(bufIps[i] != MASTER_SERVER_IP and 
-       bufIps[i] != SENSOR_SERVER_IP and
-       bufIps[i] != MOTOR_SERVER_IP and
-       bufIps[i] != FORWARD_VISION_SERVER_IP and
-       bufIps[i] != DOWNWARD_VISION_SERVER_IP and
-       bufIps[i] != SONAR_SERVER_IP):
-      print('[Warning] Connecting to non-rasp pi IP')
-
-  #Initialize remote buffers
-  for i in range(len(bufNames)):
-    client.registerRemoteBuffer(bufNames[i], bufIps[i], int(bufIds[i]))
 
 '''[Initialize Figure/Subplots]---------------------------------------------'''
 print('[Info   ] Initializing figure/subplots')
@@ -468,96 +422,6 @@ def genData():
 
   statusData[0] = 'Killed'
 
-'''getBufferData---------------------------------------------------------------
-Obtains most recent buffer data
-----------------------------------------------------------------------------'''
-def getBufferData(debug):
-  #Check each buffer's status and update data array if active
-  for i in range(NUM_BUFFERS):
-    temp, active = client.getRemoteBufferContents(bufNames[i], bufIps[i], 
-                                                  bufIds[i])
-    if active:
-      if i == 0:                          #Motor Kill
-        temp = Unpack(Kill, temp)
-        statusData[0] = temp.isKilled
-      elif i == 1:                        #Motor Health
-        temp = Unpack(Health, temp)
-        statusData[1] = temp.saturated
-        statusData[2] = temp.direction
-      elif i == 2:                        #Motor Outputs
-        temp = Unpack(Outputs, temp)
-        for j in range(4):
-          thrusterData[0][j] = temp.motors[j]
-        for j in range(4):
-          thrusterData[1][j] = temp.motors[j + 4]
-      elif i == 3:                        #Motor Linear
-        temp = Unpack(PhysicalOutput, temp)
-        for j in range(3):
-          navData[0][j] = temp.force[j]
-          navData[0][j + 3] = temp.torque[j]
-      elif i == 4:                        #Motor Angular
-        temp = Unpack(PhysicalOutput, temp)
-        for j in range(3):
-          navData[1][j] = temp.force[j]
-          navData[1][j + 3] = temp.torque[j]
-      elif i == 5:                        #Sensors Linear
-        temp = Unpack(Linear, temp)
-        for j in range(3):
-          movementData[0][j] = temp.pos[j]
-          movementData[1][j] = temp.vel[j]
-          movementData[2][j] = temp.acc[j]
-      elif i == 6:                        #Sensors Angular
-        temp = Unpack(Angular, temp)
-        for j in range(4):
-          orientationData[j] = temp.pos[j]
-      #elif i == 7:                       #Sensors Data
-      elif i == 8:                       #Master Control
-        if debug:
-          temp = Unpack(ControlInput, temp)
-          masterControlData[2][0][0] = int(temp.mode)
-          #Unpack angular data
-          for j in range(3):
-            if ((1 << j) & int(temp.mode)):
-              masterControlData[0][j][0] = 0
-              for k in range(2):
-                masterControlData[0][j][k + 1] = temp.angular[j].pos[k]
-            else:
-              masterControlData[0][j][0] = temp.angular[j].vel
-              for k in range(2):
-                masterControlData[0][j][k + 1] = 0
-          #Unpack linear data
-          for j in range(3):
-            if ((1 << (j + 3)) & int(temp.mode)):
-              masterControlData[1][j][0] = 0
-              for k in range(2):            
-                masterControlData[1][j][k + 1] = temp.linear[j].pos[k]
-            else:
-              masterControlData[1][j][0] = temp.linear[j].vel
-              for k in range(2):            
-                masterControlData[1][j][k + 1] = 0
-      #elif i == 9:                       #Master Goals
-      #elif i == 10:                       #Master Sensor Reset
-      elif i == 11:                        #CV Forw Target Location
-        temp = Unpack(LocationArray, temp)
-        for j in range(3):
-          cvforwardData[j][0] = temp.locations[j].x
-          cvforwardData[j][1] = temp.locations[j].y
-          cvforwardData[j][2] = temp.locations[j].z
-          cvforwardData[j][3] = temp.locations[j].confidence
-          cvforwardData[j][4] = temp.locations[j].loctype
-      elif i == 12:                       #CV Down Target Location
-        temp = Unpack(Location, temp)
-        cvdownData[0][0] = temp.x
-        cvdownData[0][1] = temp.y
-        cvdownData[0][2] = temp.z
-        cvdownData[0][3] = temp.confidence
-        cvdownData[0][4] = temp.loctype
-      #elif i == 13:                      #Sonar Target Location
-      #Set status string to indicate whether buffer is up or down
-      statusStrings[i] = 'Up  '
-    else:
-      statusStrings[i] = 'Down'
-
 '''animate---------------------------------------------------------------------
 Updates subplots of figure
 ----------------------------------------------------------------------------'''
@@ -565,10 +429,7 @@ def animate(i):
   global mode, ax1, ax2, ax3, ax4, ax5, data, dataHist, cubeLines, cubeArrow
 
   #Grab latest data to plot as well as info on whether buffers are online
-  if mode == MODE_DEMO:
-    genData()
-  else:
-    getBufferData(mode)
+  genData()
   
   '''[Polar Targets]--------------------------------------------------------'''  
 
@@ -828,4 +689,5 @@ ani = animation.FuncAnimation(fig, animate, init_func = initFigure,
 
 #Show the figure
 plt.show()
+
 

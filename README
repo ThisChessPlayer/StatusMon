@@ -14,8 +14,59 @@ Dependencies:
   -numpy
   -Python (2.7, 3.4, and 3.5 officially supported)
   -PythonSharedBuffers
-  -DistributedSharedMemory
+  -DistributedSharedMemory (In submodule)
 -------------------------------------------------------------------------------
+Setup and Running:
+1. If only Demo is needed, look at Running Demo.
+2. If setting up for RoboSub use, look at Live Setup (harder to set up)
+  
+  Live Setup:
+    Setting up DSM:
+      sudo apt-get install libboost1.55-all-dev
+      sudo apt-get install python3.4-dev
+      sudo ln -s /usr/lib/arm-linux-gnueabihf/libboost_python-py34.a /usr/lib/arm-linux-gnueabihf/libboost_python3.a
+      sudo ln -s /usr/lib/arm-linux-gnueabihf/libboost_python-py34.so /usr/lib/arm-linux-gnueabihf/libboost_python3.so
+      git submodule init
+      git submodule update
+      cd DistributedSharedMemory
+      mkdir build
+      cd build
+      git submodule init
+      git submodule update
+      cmake ..
+      make
+      cd ../..  
+    Running in Live mode (monitors actual DSM buffers):
+      In one terminal:
+        python3 statusmon.py
+      In another terminal:
+        cd DistributedSharedMemory/build
+	./DSMServer 47
+
+  Running Demo (generates random data to display):
+    python3 statusmonDemo.py
+    -- OR --
+    If DSM is built, the following option is also available
+      In one terminal, run:
+        python3 statusmon.py -m demo
+      In another terminal, run:
+        cd DistributedSharedMemory/build
+	./DSMServer 47
+  
+  Usage:
+    python3 statusmon.py [-m] <mode> [-r] | [-h]
+
+  Help:
+    python3 statusmon.py -h
+-------------------------------------------------------------------------------
+Changelog:
+09-06-16
+  -Added statusmonDemo.py which does not require DSM to run for extra
+   simplicity. It always runs in Demo mode even if mode is manually set.
+  -Statusmon in demo mode will also no longer initialize DSM for faster
+   startup time, although does import DSM so DSM must still be built properly.
+  -Minor change in usage statement to make it more accurate.
+
 07-24-16
   -Statusmon now accepts command line args for setting status mode (demo or
    live), initializing data (0 or random), and displaying help.
